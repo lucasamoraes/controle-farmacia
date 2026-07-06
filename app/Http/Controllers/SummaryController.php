@@ -1,0 +1,140 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Company;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
+
+class SummaryController extends Controller
+{
+    public function __invoke(Request $request): View
+    {
+        $company = $this->company();
+        $selectedMonth = $this->selectedMonth($request);
+        $previousMonth = $selectedMonth->copy()->subMonth();
+        $monthStart = $selectedMonth->copy()->startOfMonth();
+        $monthEnd = $selectedMonth->copy()->endOfMonth();
+        $previousStart = $previousMonth->copy()->startOfMonth();
+        $previousEnd = $previousMonth->copy()->endOfMonth();
+
+        $monthlyRevenue = $company->monthlyRevenues()->whereDate('reference_month', $monthStart)->first();
+        $previousRevenue = $company->monthlyRevenues()->whereDate('reference_month', $previousStart)->first();
+
+        $categoryTotals = $this->categoryTotals($company, $monthStart, $monthEnd);
+        $supplierTotals = $this->supplierTotals($company, $monthStart, $monthEnd);
+        $monthlyEvolution = $this->monthlyEvolution($company, $selectedMonth);
+
+        $totalExpenses = $categoryTotals->sum('total');
+        $stockPurchases = $supplierTotals->sum('total');
+        $grossRevenue = (float) ($monthlyRevenue->gross_revenue ?? 0);
+        $previousGrossRevenue = (float) ($previousRevenue->gross_revenue ?? 0);
+
+        return view('summary.index', [
+            'company' => $company,
+            'selectedMonth' => $selectedMonth,
+            'previousMonth' => $previousMonth,
+            'monthlyRevenue' => $monthlyRevenue,
+            'previousRevenue' => $previousRevenue,
+            'categoryTotals' => $categoryTotals,
+            'supplierTotals' => $supplierTotals,
+            'monthlyEvolution' => $monthlyEvolution,
+            'totalExpenses' => $totalExpenses,
+            'stockPurchases' => $stockPurchases,
+            'grossRevenue' => $grossRevenue,
+            'previousGrossRevenue' => $previousGrossRevenue,
+            'expensesVsCurrentRevenue' => $this->ratio($totalExpenses, $grossRevenue),
+            'expensesVsPreviousRevenue' => $this->ratio($totalExpenses, $previousGrossRevenue),
+            'profitEstimate' => $grossRevenue - $totalExpenses,
+        ]);
+    }
+
+    private function selectedMonth(Request $request): Carbon
+    {
+        $month = $request->query('mes');
+
+        if ($month && preg_match('/^\d{4}-\d{2}$/', $month)) {
+            return Carbon::createFromFormat('Y-m-d', $month . '-01')->startOfMonth();
+        }
+
+        return now()->startOfMonth();
+    }
+
+    private function categoryTotals(Company $company, Carbon $start, Carbon $end)
+    {
+        return $company->payables()
+            ->leftJoin('financial_categories', 'financial_categories.id', '=', 'payables.financial_category_id')
+            ->whereBetween('payables.due_date', [$start, $end])
+            ->where('payables.status', '!=', 'cancelled')
+            ->groupBy('financial_categories.id', 'financial_categories.name')
+            ->orderByDesc(DB::raw('SUM(payables.amount)'))
+            ->get([
+                DB::raw("COALESCE(financial_categories.name, 'Sem categoria') as name"),
+                DB::raw('SUM(payables.amount) as total'),
+            ]);
+    }
+
+    private function supplierTotals(Company $company, Carbon $start, Carbon $end)
+    {
+        return $company->payables()
+            ->leftJoin('suppliers', 'suppliers.id', '=', 'payables.supplier_id')
+            ->leftJoin('financial_categories', 'financial_categories.id', '=', 'payables.financial_category_id')
+            ->whereBetween('payables.due_date', [$start, $end])
+            ->where('payables.status', '!=', 'cancelled')
+            ->where(function ($query) {
+                $query->where('financial_categories.name', 'like', '%mercadoria%')
+                    ->orWhere('financial_categories.name', 'like', '%estoque%');
+            })
+            ->groupBy('suppliers.id', 'suppliers.name')
+            ->orderByDesc(DB::raw('SUM(payables.amount)'))
+            ->limit(20)
+            ->get([
+                DB::raw("COALESCE(suppliers.name, 'Sem fornecedor') as name"),
+                DB::raw('SUM(payables.amount) as total'),
+            ]);
+    }
+
+    private function monthlyEvolution(Company $company, Carbon $selectedMonth): array
+    {
+        $months = [];
+
+        for ($i = 5; $i >= 0; $i--) {
+            $month = $selectedMonth->copy()->subMonths($i)->startOfMonth();
+            $start = $month->copy()->startOfMonth();
+            $end = $month->copy()->endOfMonth();
+            $revenue = $company->monthlyRevenues()->whereDate('reference_month', $start)->first();
+            $expenses = (float) $company->payables()
+                ->whereBetween('due_date', [$start, $end])
+                ->where('status', '!=', 'cancelled')
+                ->sum('amount');
+
+            $months[] = [
+                'label' => $month->translatedFormat('M/Y'),
+                'month' => $month->format('Y-m'),
+                'gross_revenue' => (float) ($revenue->gross_revenue ?? 0),
+                'expenses' => $expenses,
+                'sales_count' => (int) ($revenue->sales_count ?? 0),
+                'cmv_percentage' => (float) ($revenue->cmv_percentage ?? 0),
+            ];
+        }
+
+        return $months;
+    }
+
+    private function ratio(float $value, float $base): ?float
+    {
+        if ($base <= 0) {
+            return null;
+        }
+
+        return ($value / $base) * 100;
+    }
+
+    private function company(): Company
+    {
+        return Auth::user()->companies()->firstOrFail();
+    }
+}
