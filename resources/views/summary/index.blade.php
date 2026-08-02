@@ -6,6 +6,7 @@
     $maxSupplier = max((float) $supplierTotals->max('total'), 1);
     $fmtMoney = fn ($value) => 'R$ ' . number_format((float) $value, 2, ',', '.');
     $fmtPercent = fn ($value) => $value === null ? '-' : number_format((float) $value, 1, ',', '.') . '%';
+    $canWriteFinance = auth()->user()->canWriteFinance($company);
 @endphp
 
 @section('content')
@@ -17,7 +18,9 @@
         <form class="actions" method="get" action="{{ route('resumo.index') }}">
             <input type="month" name="mes" value="{{ $monthInput }}" style="width:160px;">
             <button class="btn secondary" type="submit">Ver mes</button>
-            <a class="btn" href="{{ route('faturamento-mensal.create', ['mes' => $monthInput]) }}">Registrar faturamento</a>
+            @if ($canWriteFinance)
+                <a class="btn" href="{{ route('faturamento-mensal.create', ['mes' => $monthInput]) }}">Registrar faturamento</a>
+            @endif
         </form>
     </div>
 
@@ -34,6 +37,25 @@
         <div class="card"><div class="metric-label">Vendas</div><div class="metric-value">{{ number_format((int) ($monthlyRevenue->sales_count ?? 0), 0, ',', '.') }}</div></div>
         <div class="card"><div class="metric-label">Ticket medio</div><div class="metric-value">{{ $fmtMoney($monthlyRevenue->average_ticket ?? 0) }}</div></div>
     </div>
+
+    <section class="card" style="margin-bottom:18px;">
+        <h2 class="panel-title">Balcao x Delivery</h2>
+        <div class="table-wrap"><table>
+            <thead><tr><th>Canal</th><th>Faturamento</th><th>% do valor</th><th>Vendas</th><th>% das vendas</th><th>Ticket medio</th></tr></thead>
+            <tbody>
+                @foreach ($channelSummary as $channel)
+                    <tr>
+                        <td><strong>{{ $channel['label'] }}</strong></td>
+                        <td>{{ $fmtMoney($channel['revenue']) }}</td>
+                        <td>{{ $fmtPercent($channel['revenue_percent']) }}</td>
+                        <td>{{ number_format($channel['sales_count'], 0, ',', '.') }}</td>
+                        <td>{{ $fmtPercent($channel['sales_percent']) }}</td>
+                        <td>{{ $fmtMoney($channel['average_ticket']) }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table></div>
+    </section>
 
     <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start;">
         <section class="card">
@@ -84,12 +106,14 @@
     <section class="card" style="margin-top:18px;">
         <h2 class="panel-title">Evolucao dos ultimos meses</h2>
         <div class="table-wrap"><table>
-            <thead><tr><th>Mes</th><th>Faturamento</th><th>Despesas</th><th>Despesas/Faturamento</th><th>Vendas</th><th>CMV</th></tr></thead>
+            <thead><tr><th>Mes</th><th>Faturamento</th><th>Delivery</th><th>Balcao</th><th>Despesas</th><th>Despesas/Faturamento</th><th>Vendas</th><th>CMV</th></tr></thead>
             <tbody>
             @foreach ($monthlyEvolution as $row)
                 <tr>
                     <td><a href="{{ route('resumo.index', ['mes' => $row['month']]) }}"><strong>{{ $row['label'] }}</strong></a></td>
                     <td>{{ $fmtMoney($row['gross_revenue']) }}</td>
+                    <td>{{ $fmtMoney($row['delivery_revenue']) }}<br><span style="color:var(--muted);">{{ number_format($row['delivery_sales_count'], 0, ',', '.') }} vendas</span></td>
+                    <td>{{ $fmtMoney($row['counter_revenue']) }}<br><span style="color:var(--muted);">{{ number_format($row['counter_sales_count'], 0, ',', '.') }} vendas</span></td>
                     <td>{{ $fmtMoney($row['expenses']) }}</td>
                     <td>{{ $fmtPercent($row['gross_revenue'] > 0 ? ($row['expenses'] / $row['gross_revenue']) * 100 : null) }}</td>
                     <td>{{ number_format($row['sales_count'], 0, ',', '.') }}</td>

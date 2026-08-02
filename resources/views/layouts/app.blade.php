@@ -54,13 +54,29 @@
         .status.open { background:#e1effe; color:#1e429f; }
         .status.overdue { background:#fde8e8; color:#9b1c1c; }
         .status.cancelled { background:#f1f5f9; color:#64748b; }
+        .role-pill { display:inline-flex; border-radius:999px; padding:5px 9px; font-size:12px; font-weight:700; background:#e8eef5; color:#243b53; }
         .form { max-width:760px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:20px; display:grid; gap:16px; }
+        .filter-bar { margin-top:18px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; display:grid; gap:12px; }
+        .filter-grid { display:grid; grid-template-columns:2fr repeat(4, minmax(130px, 1fr)); gap:10px; align-items:end; }
+        .filter-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+        .quick-filters { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        .quick-filter { display:inline-flex; align-items:center; min-height:32px; padding:7px 10px; border:1px solid var(--line); border-radius:6px; color:#243b53; background:#fff; font-weight:700; font-size:12px; }
+        .quick-filter.active { background:var(--brand); color:#fff; border-color:var(--brand); }
+        .bar-list { display:grid; gap:12px; }
+        .bar-row { display:grid; gap:6px; }
+        .bar-meta { display:flex; justify-content:space-between; gap:12px; color:#334e68; font-weight:700; }
+        .bar-track { height:9px; background:#e8eef5; border-radius:999px; overflow:hidden; }
+        .bar-fill { height:100%; width:var(--w, 0%); background:var(--c, var(--brand)); border-radius:999px; }
         .field-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
         label { display:grid; gap:6px; font-weight:700; color:#344054; }
         input, select, textarea { width:100%; border:1px solid #cbd5e1; border-radius:6px; padding:10px 11px; font:inherit; background:#fff; color:var(--ink); min-height:40px; }
         textarea { min-height:90px; resize:vertical; }
         .error { color:var(--danger); font-size:12px; margin-top:4px; }
         .alert { border:1px solid #b7ead8; background:#ecfdf5; color:#065f46; padding:12px 14px; border-radius:6px; margin:18px 0; }
+        .alert.warning { border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
+        .alert.danger { border-color:#fecaca; background:#fef2f2; color:#991b1b; }
+        .alert.info { border-color:#bfdbfe; background:#eff6ff; color:#1e40af; }
+        .alert strong { display:block; margin-bottom:4px; color:inherit; }
         .auth-shell { min-height:100vh; display:grid; place-items:center; padding:24px; background:#eef3f8; }
         .auth-box { width:min(460px, 100%); background:#fff; border:1px solid var(--line); border-radius:8px; padding:26px; }
         .auth-box h1 { margin:0 0 6px; font-size:24px; }
@@ -90,6 +106,8 @@
             .topbar-actions form { display:none; }
             .content { padding:16px; max-width:none; }
             .stats, .field-grid { grid-template-columns:1fr; }
+            .filter-grid { grid-template-columns:1fr; }
+            .filter-actions .btn, .quick-filter { flex:1 1 auto; }
             .grid[style*="grid-template-columns"] { grid-template-columns:1fr !important; }
             .title { font-size:22px; }
             .metric-value { font-size:22px; }
@@ -115,10 +133,16 @@
                     <a href="{{ route('faturamento-mensal.index') }}" class="{{ request()->routeIs('faturamento-mensal.*') ? 'active' : '' }}">Faturamento</a>
                     <a href="{{ route('fornecedores.index') }}" class="{{ request()->routeIs('fornecedores.*') ? 'active' : '' }}">Fornecedores</a>
                     <a href="{{ route('contas-a-pagar.index') }}" class="{{ request()->routeIs('contas-a-pagar.*') ? 'active' : '' }}">Contas a pagar</a>
-                    <a href="{{ route('boletos.create') }}" class="{{ request()->routeIs('boletos.*') ? 'active' : '' }}">Boletos PDF</a>
-                    <a href="{{ route('imports.boletos.create') }}" class="{{ request()->routeIs('imports.*') ? 'active' : '' }}">Importar</a>
+                    @if (auth()->user()->canWriteFinance($company))
+                        <a href="{{ route('boletos.create') }}" class="{{ request()->routeIs('boletos.*') ? 'active' : '' }}">Boletos PDF</a>
+                        <a href="{{ route('imports.boletos.create') }}" class="{{ request()->routeIs('imports.boletos.*') ? 'active' : '' }}">Importar</a>
+                        <a href="{{ route('imports.vendas-diarias.create') }}" class="{{ request()->routeIs('imports.vendas-diarias.*') ? 'active' : '' }}">Vendas diarias</a>
+                    @endif
+                    @if (auth()->user()->canManageUsers($company))
+                        <a href="{{ route('usuarios.index') }}" class="{{ request()->routeIs('usuarios.*') ? 'active' : '' }}">Usuarios</a>
+                    @endif
                 </nav>
-                <div class="sidebar-footer">{{ auth()->user()->name }}</div>
+                <div class="sidebar-footer">{{ auth()->user()->name }}<br>{{ ['owner' => 'Dono', 'finance' => 'Financeiro', 'viewer' => 'Consulta'][auth()->user()->roleForCompany($company)] ?? 'Usuario' }}</div>
             </aside>
             <main class="main">
                 <header class="topbar">
@@ -141,6 +165,19 @@
                     @if (session('status'))
                         <div class="alert">{{ session('status') }}</div>
                     @endif
+                    @if ($errors->any())
+                        <div class="alert danger">
+                            <strong>Revise as informacoes</strong>
+                            {{ $errors->first() }}
+                        </div>
+                    @endif
+                    @if (session('app_alert'))
+                        @php $appAlert = session('app_alert'); @endphp
+                        <div class="alert {{ $appAlert['level'] ?? 'info' }}">
+                            <strong>{{ $appAlert['title'] ?? 'Aviso' }}</strong>
+                            {{ $appAlert['message'] ?? '' }}
+                        </div>
+                    @endif
                     @yield('content')
                 </section>
             </main>
@@ -148,6 +185,17 @@
     @else
         @yield('content')
     @endauth
+    <div class="modal-backdrop" data-confirm-backdrop hidden></div>
+    <div class="modal" data-confirm-dialog hidden role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+        <div class="modal-panel">
+            <h2 id="confirm-modal-title" class="panel-title" data-confirm-title>Confirmar acao</h2>
+            <p class="subtitle" data-confirm-message></p>
+            <div class="actions" style="justify-content:flex-end; margin-top:18px;">
+                <button class="btn secondary" type="button" data-confirm-cancel>Voltar</button>
+                <button class="btn danger" type="button" data-confirm-ok>Confirmar</button>
+            </div>
+        </div>
+    </div>
     <script>
         const body = document.body;
         const menuButton = document.querySelector('[data-menu-toggle]');
@@ -223,6 +271,59 @@
                 if (payFeedback) payFeedback.textContent = 'Linha digitavel copiada.';
             }
         });
+
+        const confirmDialog = document.querySelector('[data-confirm-dialog]');
+        const confirmBackdrop = document.querySelector('[data-confirm-backdrop]');
+        const confirmTitle = confirmDialog?.querySelector('[data-confirm-title]');
+        const confirmMessage = confirmDialog?.querySelector('[data-confirm-message]');
+        const confirmOk = confirmDialog?.querySelector('[data-confirm-ok]');
+        const confirmCancel = confirmDialog?.querySelector('[data-confirm-cancel]');
+        let pendingConfirmForm = null;
+        const closeConfirm = () => {
+            pendingConfirmForm = null;
+            if (confirmDialog) confirmDialog.hidden = true;
+            if (confirmBackdrop) confirmBackdrop.hidden = true;
+        };
+        document.querySelectorAll('form[data-confirm-message]').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                if (form.dataset.confirmed === '1') return;
+                event.preventDefault();
+                pendingConfirmForm = form;
+                if (confirmTitle) confirmTitle.textContent = form.dataset.confirmTitle || 'Confirmar acao';
+                if (confirmMessage) confirmMessage.textContent = form.dataset.confirmMessage || 'Deseja continuar?';
+                if (confirmOk) {
+                    confirmOk.textContent = form.dataset.confirmButton || 'Confirmar';
+                    confirmOk.className = `btn ${form.dataset.confirmDanger === '1' ? 'danger' : ''}`.trim();
+                }
+                if (confirmDialog) confirmDialog.hidden = false;
+                if (confirmBackdrop) confirmBackdrop.hidden = false;
+            });
+        });
+        confirmOk?.addEventListener('click', () => {
+            if (!pendingConfirmForm) return;
+            pendingConfirmForm.dataset.confirmed = '1';
+            pendingConfirmForm.submit();
+        });
+        confirmCancel?.addEventListener('click', closeConfirm);
+        confirmBackdrop?.addEventListener('click', closeConfirm);
+
+        const dailyAlertDialog = document.querySelector('[data-daily-alert-dialog]');
+        const dailyAlertBackdrop = document.querySelector('[data-daily-alert-backdrop]');
+        const dailyAlertClose = document.querySelector('[data-daily-alert-close]');
+        if (dailyAlertDialog && dailyAlertBackdrop) {
+            const key = dailyAlertDialog.dataset.alertKey;
+            if (!key || localStorage.getItem(key) !== '1') {
+                dailyAlertDialog.hidden = false;
+                dailyAlertBackdrop.hidden = false;
+                if (key) localStorage.setItem(key, '1');
+            }
+        }
+        const closeDailyAlert = () => {
+            if (dailyAlertDialog) dailyAlertDialog.hidden = true;
+            if (dailyAlertBackdrop) dailyAlertBackdrop.hidden = true;
+        };
+        dailyAlertClose?.addEventListener('click', closeDailyAlert);
+        dailyAlertBackdrop?.addEventListener('click', closeDailyAlert);
     </script>
 </body>
 </html>

@@ -7,7 +7,7 @@
 
 @section('content')
     <h1 class="title">{{ $editing ? 'Editar dados mensais' : 'Registrar dados mensais' }}</h1>
-    <p class="subtitle" style="margin-bottom:22px;">Esses dados alimentam os blocos de faturamento, vendas e CMV do resumo.</p>
+    <p class="subtitle" style="margin-bottom:22px;">Esses dados alimentam os blocos de faturamento, vendas, canais e CMV do resumo.</p>
 
     <form class="form" method="post" action="{{ $action }}">
         @csrf
@@ -20,7 +20,7 @@
                 <input type="month" name="reference_month" value="{{ old('reference_month', $referenceMonth->format('Y-m')) }}" required>
                 @error('reference_month') <span class="error">{{ $message }}</span> @enderror
             </label>
-            <label>Faturamento bruto
+            <label>Faturamento bruto total
                 <input type="number" step="0.01" min="0" name="gross_revenue" value="{{ old('gross_revenue', $revenue->gross_revenue ?? '') }}" required>
                 @error('gross_revenue') <span class="error">{{ $message }}</span> @enderror
             </label>
@@ -36,6 +36,31 @@
                 @error('sales_count') <span class="error">{{ $message }}</span> @enderror
             </label>
         </div>
+
+        <section class="card" style="padding:16px;">
+            <h2 class="panel-title">Vendas por canal</h2>
+            <p class="subtitle" style="margin-bottom:14px;">Quando preencher delivery e balcao, o sistema recalcula automaticamente o faturamento bruto e a quantidade total.</p>
+            <div class="field-grid">
+                <label>Quantidade de vendas no delivery
+                    <input type="number" min="0" name="delivery_sales_count" value="{{ old('delivery_sales_count', $revenue->delivery_sales_count ?? 0) }}">
+                    @error('delivery_sales_count') <span class="error">{{ $message }}</span> @enderror
+                </label>
+                <label>Faturamento no delivery
+                    <input type="number" step="0.01" min="0" name="delivery_revenue" value="{{ old('delivery_revenue', $revenue->delivery_revenue ?? 0) }}">
+                    @error('delivery_revenue') <span class="error">{{ $message }}</span> @enderror
+                </label>
+            </div>
+            <div class="field-grid" style="margin-top:14px;">
+                <label>Quantidade de vendas no balcao
+                    <input type="number" min="0" name="counter_sales_count" value="{{ old('counter_sales_count', $revenue->counter_sales_count ?? 0) }}">
+                    @error('counter_sales_count') <span class="error">{{ $message }}</span> @enderror
+                </label>
+                <label>Faturamento no balcao
+                    <input type="number" step="0.01" min="0" name="counter_revenue" value="{{ old('counter_revenue', $revenue->counter_revenue ?? 0) }}">
+                    @error('counter_revenue') <span class="error">{{ $message }}</span> @enderror
+                </label>
+            </div>
+        </section>
 
         <div class="field-grid">
             <label>CMV (%)

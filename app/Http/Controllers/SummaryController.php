@@ -24,14 +24,17 @@ class SummaryController extends Controller
         $monthlyRevenue = $company->monthlyRevenues()->whereDate('reference_month', $monthStart)->first();
         $previousRevenue = $company->monthlyRevenues()->whereDate('reference_month', $previousStart)->first();
 
-        $categoryTotals = $this->categoryTotals($company, $monthStart, $monthEnd);
-        $supplierTotals = $this->supplierTotals($company, $monthStart, $monthEnd);
+        $allCategoryTotals = $this->categoryTotals($company, $monthStart, $monthEnd);
+        $allSupplierTotals = $this->supplierTotals($company, $monthStart, $monthEnd);
+        $categoryTotals = $allCategoryTotals;
+        $supplierTotals = $allSupplierTotals;
         $monthlyEvolution = $this->monthlyEvolution($company, $selectedMonth);
 
-        $totalExpenses = $categoryTotals->sum('total');
-        $stockPurchases = $supplierTotals->sum('total');
+        $totalExpenses = $allCategoryTotals->sum('total');
+        $stockPurchases = $allSupplierTotals->sum('total');
         $grossRevenue = (float) ($monthlyRevenue->gross_revenue ?? 0);
         $previousGrossRevenue = (float) ($previousRevenue->gross_revenue ?? 0);
+        $channelSummary = $this->channelSummary($monthlyRevenue);
 
         return view('summary.index', [
             'company' => $company,
@@ -46,6 +49,7 @@ class SummaryController extends Controller
             'stockPurchases' => $stockPurchases,
             'grossRevenue' => $grossRevenue,
             'previousGrossRevenue' => $previousGrossRevenue,
+            'channelSummary' => $channelSummary,
             'expensesVsCurrentRevenue' => $this->ratio($totalExpenses, $grossRevenue),
             'expensesVsPreviousRevenue' => $this->ratio($totalExpenses, $previousGrossRevenue),
             'profitEstimate' => $grossRevenue - $totalExpenses,
@@ -63,12 +67,18 @@ class SummaryController extends Controller
         return now()->startOfMonth();
     }
 
-    private function categoryTotals(Company $company, Carbon $start, Carbon $end)
+    private function categoryTotals(Company $company, Carbon $start, Carbon $end, string $search = '')
     {
         return $company->payables()
             ->leftJoin('financial_categories', 'financial_categories.id', '=', 'payables.financial_category_id')
             ->whereBetween('payables.due_date', [$start, $end])
             ->where('payables.status', '!=', 'cancelled')
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($inner) use ($search) {
+                    $inner->where('financial_categories.name', 'like', "%{$search}%")
+                        ->orWhere('payables.description', 'like', "%{$search}%");
+                });
+            })
             ->groupBy('financial_categories.id', 'financial_categories.name')
             ->orderByDesc(DB::raw('SUM(payables.amount)'))
             ->get([
@@ -77,13 +87,20 @@ class SummaryController extends Controller
             ]);
     }
 
-    private function supplierTotals(Company $company, Carbon $start, Carbon $end)
+    private function supplierTotals(Company $company, Carbon $start, Carbon $end, string $search = '')
     {
         return $company->payables()
             ->leftJoin('suppliers', 'suppliers.id', '=', 'payables.supplier_id')
             ->leftJoin('financial_categories', 'financial_categories.id', '=', 'payables.financial_category_id')
             ->whereBetween('payables.due_date', [$start, $end])
             ->where('payables.status', '!=', 'cancelled')
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($inner) use ($search) {
+                    $inner->where('suppliers.name', 'like', "%{$search}%")
+                        ->orWhere('suppliers.trade_name', 'like', "%{$search}%")
+                        ->orWhere('payables.description', 'like', "%{$search}%");
+                });
+            })
             ->where(function ($query) {
                 $query->where('financial_categories.name', 'like', '%mercadoria%')
                     ->orWhere('financial_categories.name', 'like', '%estoque%');
@@ -117,6 +134,10 @@ class SummaryController extends Controller
                 'gross_revenue' => (float) ($revenue->gross_revenue ?? 0),
                 'expenses' => $expenses,
                 'sales_count' => (int) ($revenue->sales_count ?? 0),
+                'delivery_sales_count' => (int) ($revenue->delivery_sales_count ?? 0),
+                'delivery_revenue' => (float) ($revenue->delivery_revenue ?? 0),
+                'counter_sales_count' => (int) ($revenue->counter_sales_count ?? 0),
+                'counter_revenue' => (float) ($revenue->counter_revenue ?? 0),
                 'cmv_percentage' => (float) ($revenue->cmv_percentage ?? 0),
             ];
         }
@@ -131,6 +152,35 @@ class SummaryController extends Controller
         }
 
         return ($value / $base) * 100;
+    }
+
+    private function channelSummary($monthlyRevenue): array
+    {
+        $deliveryRevenue = (float) ($monthlyRevenue->delivery_revenue ?? 0);
+        $counterRevenue = (float) ($monthlyRevenue->counter_revenue ?? 0);
+        $deliverySales = (int) ($monthlyRevenue->delivery_sales_count ?? 0);
+        $counterSales = (int) ($monthlyRevenue->counter_sales_count ?? 0);
+        $totalRevenue = $deliveryRevenue + $counterRevenue;
+        $totalSales = $deliverySales + $counterSales;
+
+        return [
+            [
+                'label' => 'Delivery',
+                'sales_count' => $deliverySales,
+                'revenue' => $deliveryRevenue,
+                'sales_percent' => $this->ratio($deliverySales, $totalSales),
+                'revenue_percent' => $this->ratio($deliveryRevenue, $totalRevenue),
+                'average_ticket' => $deliverySales > 0 ? $deliveryRevenue / $deliverySales : 0,
+            ],
+            [
+                'label' => 'Balcao',
+                'sales_count' => $counterSales,
+                'revenue' => $counterRevenue,
+                'sales_percent' => $this->ratio($counterSales, $totalSales),
+                'revenue_percent' => $this->ratio($counterRevenue, $totalRevenue),
+                'average_ticket' => $counterSales > 0 ? $counterRevenue / $counterSales : 0,
+            ],
+        ];
     }
 
     private function company(): Company

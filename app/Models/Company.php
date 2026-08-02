@@ -46,6 +46,11 @@ class Company extends Model
         return $this->hasMany(MonthlyRevenue::class);
     }
 
+    public function dailySales(): HasMany
+    {
+        return $this->hasMany(DailySale::class);
+    }
+
     public function boletoUploads(): HasMany
     {
         return $this->hasMany(BoletoUpload::class);

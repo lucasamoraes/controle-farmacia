@@ -13,6 +13,25 @@
         <form class="form" method="post" action="{{ route('boletos.confirm', $boleto) }}" style="max-width:none;">
             @csrf
 
+            @if ($duplicatePayables->isNotEmpty())
+                <div class="card" style="background:#fff7ed; border-color:#fed7aa;">
+                    <strong style="color:#9a3412;">Possivel boleto duplicado</strong>
+                    <p class="subtitle" style="margin-top:6px;">Encontramos conta parecida ja cadastrada. Confira antes de confirmar.</p>
+                    <div style="margin-top:12px; display:grid; gap:8px;">
+                        @foreach ($duplicatePayables as $duplicate)
+                            <div style="border-top:1px solid #fed7aa; padding-top:8px;">
+                                <strong>{{ $duplicate->description }}</strong><br>
+                                <span style="color:#7c2d12;">
+                                    {{ $duplicate->due_date->format('d/m/Y') }} -
+                                    R$ {{ number_format($duplicate->amount, 2, ',', '.') }} -
+                                    {{ $duplicate->supplier->name ?? 'Sem fornecedor' }}
+                                </span>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
             <div class="field-grid">
                 <label>Descricao
                     <input name="description" value="{{ old('description', $cnpjData['name'] ?? $parsed['beneficiary_name'] ?? $boleto->original_file_name) }}" required>
@@ -40,23 +59,26 @@
                 </label>
             </div>
 
-            @if (($parsed['document'] ?? null))
-                @if (! $suggestedSupplier)
-                    <label style="display:flex; align-items:flex-start; gap:8px; font-weight:400;">
-                        <input type="checkbox" name="create_supplier" value="1" checked style="width:auto; margin-top:3px;">
-                        <span>Criar fornecedor automaticamente com o CNPJ {{ $parsed['document'] }}{{ $cnpjData ? ' e dados cadastrais encontrados' : '' }}.</span>
-                    </label>
-                    <label style="display:flex; align-items:flex-start; gap:8px; font-weight:400;">
-                        <input type="checkbox" name="link_document_to_supplier" value="1" checked style="width:auto; margin-top:3px;">
-                        <span>Se eu selecionar um fornecedor existente acima, vincular este CNPJ a ele.</span>
-                    </label>
-                @else
-                    <div class="card" style="background:#f8fafc;">
-                        <strong>CNPJ ja cadastrado</strong>
-                        <p class="subtitle" style="margin-top:6px;">O sistema encontrou este CNPJ no fornecedor {{ $suggestedSupplier->name }}.</p>
-                    </div>
+            <label>CNPJ/CPF do fornecedor
+                <input name="document" value="{{ old('document', $parsed['document'] ?? '') }}" placeholder="Somente numeros ou com pontuacao">
+                @error('document') <span class="error">{{ $message }}</span> @enderror
+            </label>
+
+            <div class="card" style="background:#f8fafc;">
+                <strong>Vinculo do fornecedor</strong>
+                <p class="subtitle" style="margin-top:6px;">Se o CNPJ estiver correto, escolha se deseja usar um fornecedor existente ou criar um novo automaticamente.</p>
+                @if ($suggestedSupplier)
+                    <p class="subtitle" style="margin-top:8px;">Fornecedor sugerido pelo CNPJ extraido: <strong style="color:var(--ink);">{{ $suggestedSupplier->name }}</strong>.</p>
                 @endif
-            @endif
+                <label style="display:flex; align-items:flex-start; gap:8px; font-weight:400; margin-top:12px;">
+                    <input type="checkbox" name="create_supplier" value="1" @checked(! $suggestedSupplier) style="width:auto; margin-top:3px;">
+                    <span>Criar fornecedor automaticamente se nenhum fornecedor for selecionado.</span>
+                </label>
+                <label style="display:flex; align-items:flex-start; gap:8px; font-weight:400;">
+                    <input type="checkbox" name="link_document_to_supplier" value="1" checked style="width:auto; margin-top:3px;">
+                    <span>Se eu selecionar um fornecedor existente, vincular o CNPJ digitado a ele.</span>
+                </label>
+            </div>
 
             <div class="field-grid">
                 <label>Categoria
@@ -94,9 +116,10 @@
             <h2 class="panel-title">Dados encontrados</h2>
             <div style="display:grid; gap:12px; color:var(--muted);">
                 <div><strong style="color:var(--ink);">Arquivo</strong><br>{{ $boleto->original_file_name }}</div>
-                <div><strong style="color:var(--ink);">CNPJ/CPF</strong><br>{{ $parsed['document'] ?? '-' }}</div>
+                <div><strong style="color:var(--ink);">CNPJ/CPF extraido</strong><br>{{ $parsed['document'] ?? '-' }}</div>
                 <div><strong style="color:var(--ink);">Beneficiario no PDF</strong><br>{{ $parsed['beneficiary_name'] ?? '-' }}</div>
                 <div><strong style="color:var(--ink);">Fornecedor existente</strong><br>{{ $suggestedSupplier->name ?? '-' }}</div>
+                <div><strong style="color:var(--ink);">Possiveis duplicados</strong><br>{{ $duplicatePayables->count() }}</div>
                 <div><strong style="color:var(--ink);">Status</strong><br>{{ $boleto->processing_status }}</div>
             </div>
 

@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Supplier;
 use App\Services\BoletoParser;
 use App\Services\CnpjLookupService;
+use App\Services\FinancialAlertService;
 use App\Services\OcrService;
 use App\Services\PdfTextExtractor;
 use Illuminate\Http\RedirectResponse;
@@ -75,7 +76,7 @@ class BoletoUploadController extends Controller
         return view('boletos.review', $this->reviewData($company, $boleto));
     }
 
-    public function confirm(Request $request, BoletoUpload $boleto): RedirectResponse
+    public function confirm(Request $request, BoletoUpload $boleto, CnpjLookupService $cnpjLookup, FinancialAlertService $alerts): RedirectResponse
     {
         $company = $this->company();
         abort_unless($boleto->company_id === $company->id, 404);
@@ -84,6 +85,7 @@ class BoletoUploadController extends Controller
             'supplier_id' => ['nullable', 'exists:suppliers,id'],
             'create_supplier' => ['nullable', 'boolean'],
             'link_document_to_supplier' => ['nullable', 'boolean'],
+            'document' => ['nullable', 'string', 'max:20'],
             'financial_category_id' => ['nullable', 'exists:financial_categories,id'],
             'description' => ['required', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0'],
@@ -93,8 +95,10 @@ class BoletoUploadController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
+        $this->applyDocumentCorrection($boleto, $data['document'] ?? null, $cnpjLookup);
+        $data['digitable_line'] = $this->digitsOnly($data['digitable_line'] ?? null);
         $supplierId = $this->supplierIdForConfirmation($company, $boleto, $data);
-        unset($data['create_supplier'], $data['link_document_to_supplier']);
+        unset($data['create_supplier'], $data['link_document_to_supplier'], $data['document']);
         $data['supplier_id'] = $supplierId;
 
         $payable = $company->payables()->create($data + [
@@ -108,7 +112,10 @@ class BoletoUploadController extends Controller
             'processing_status' => 'confirmed',
         ]);
 
-        return redirect()->route('contas-a-pagar.index')->with('status', 'Boleto confirmado e conta a pagar criada.');
+        $redirect = redirect()->route('contas-a-pagar.index')->with('status', 'Boleto confirmado e conta a pagar criada.');
+        $alert = $alerts->currentMonthBoletoAlert($company, $payable);
+
+        return $alert ? $redirect->with('app_alert', $alert) : $redirect;
     }
 
     private function processUpload(BoletoUpload $upload, PdfTextExtractor $extractor, BoletoParser $boletoParser, CnpjLookupService $cnpjLookup, OcrService $ocrService, ?string $password = null): RedirectResponse
@@ -186,6 +193,7 @@ class BoletoUploadController extends Controller
         $document = $parsed['document'] ?? null;
         $supplier = $document ? $company->suppliers()->where('document', $document)->first() : null;
         $cnpjData = $parsed['cnpj_lookup'] ?? null;
+        $duplicatePayables = $this->duplicateCandidates($company, $parsed);
 
         return [
             'company' => $company,
@@ -193,9 +201,68 @@ class BoletoUploadController extends Controller
             'parsed' => $parsed,
             'cnpjData' => $cnpjData,
             'suggestedSupplier' => $supplier,
+            'duplicatePayables' => $duplicatePayables,
             'suppliers' => $company->suppliers()->where('is_active', true)->orderBy('name')->get(),
             'categories' => $company->categories()->where('type', 'expense')->orderBy('name')->get(),
         ];
+    }
+
+    private function applyDocumentCorrection(BoletoUpload $boleto, ?string $document, CnpjLookupService $cnpjLookup): void
+    {
+        $digits = preg_replace('/\D+/', '', (string) $document);
+        $parsed = $boleto->parsed_data ?? [];
+
+        if ($digits === '') {
+            unset($parsed['document']);
+            $boleto->update(['parsed_data' => $parsed]);
+
+            return;
+        }
+
+        $parsed['document'] = $digits;
+
+        if (($parsed['cnpj_lookup']['document'] ?? null) !== $digits) {
+            $parsed['cnpj_lookup'] = $cnpjLookup->lookup($digits);
+        }
+
+        $boleto->update(['parsed_data' => $parsed]);
+    }
+
+    private function duplicateCandidates(Company $company, array $parsed)
+    {
+        $digitableLine = $this->digitsOnly($parsed['digitable_line'] ?? null);
+        $document = $parsed['document'] ?? null;
+        $amount = $parsed['amount'] ?? null;
+        $dueDate = $parsed['due_date'] ?? null;
+
+        if ($digitableLine === '' && ! ($document && $amount && $dueDate)) {
+            return collect();
+        }
+
+        return $company->payables()
+            ->with('supplier')
+            ->where('status', '!=', 'cancelled')
+            ->where(function ($query) use ($digitableLine, $document, $amount, $dueDate) {
+                if ($digitableLine !== '') {
+                    $query->orWhere('digitable_line', $digitableLine);
+                }
+
+                if ($document && $amount && $dueDate) {
+                    $query->orWhere(function ($inner) use ($document, $amount, $dueDate) {
+                        $inner->whereDate('due_date', $dueDate)
+                            ->where('amount', $amount)
+                            ->whereHas('supplier', fn ($supplier) => $supplier->where('document', $document));
+                    });
+                }
+            })
+            ->orderByDesc('created_at')
+            ->limit(5)
+            ->get();
+    }
+
+    private function digitsOnly(?string $value): string
+    {
+        return preg_replace('/\D+/', '', (string) $value) ?? '';
     }
 
     private function supplierIdForConfirmation(Company $company, BoletoUpload $boleto, array $data): ?int

@@ -11,13 +11,31 @@ use Illuminate\View\View;
 
 class SupplierController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
         $company = $this->company();
+        $search = trim((string) $request->query('busca', ''));
+
+        $suppliers = $company->suppliers()
+            ->with('category')
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($inner) use ($search) {
+                    $inner->where('name', 'like', "%{$search}%")
+                        ->orWhere('trade_name', 'like', "%{$search}%")
+                        ->orWhere('document', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhereHas('category', fn ($category) => $category->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->latest()
+            ->paginate(12)
+            ->withQueryString();
 
         return view('suppliers.index', [
             'company' => $company,
-            'suppliers' => $company->suppliers()->with('category')->latest()->paginate(12),
+            'suppliers' => $suppliers,
+            'search' => $search,
         ]);
     }
 
@@ -71,6 +89,16 @@ class SupplierController extends Controller
         $fornecedore->update(['is_active' => false]);
 
         return redirect()->route('fornecedores.index')->with('status', 'Fornecedor inativado.');
+    }
+
+    public function restore(Supplier $fornecedore): RedirectResponse
+    {
+        $company = $this->company();
+        abort_unless($fornecedore->company_id === $company->id, 404);
+
+        $fornecedore->update(['is_active' => true]);
+
+        return redirect()->route('fornecedores.index')->with('status', 'Fornecedor reativado.');
     }
 
     private function validated(Request $request): array

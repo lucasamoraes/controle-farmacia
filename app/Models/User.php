@@ -39,6 +39,24 @@ class User extends Authenticatable
         return $this->belongsToMany(Company::class)->withPivot('role')->withTimestamps();
     }
 
+    public function roleForCompany(Company $company): ?string
+    {
+        $linkedCompany = $this->companies->firstWhere('id', $company->id)
+            ?? $this->companies()->whereKey($company->id)->first();
+
+        return $linkedCompany?->pivot?->role;
+    }
+
+    public function canManageUsers(Company $company): bool
+    {
+        return $this->roleForCompany($company) === 'owner';
+    }
+
+    public function canWriteFinance(Company $company): bool
+    {
+        return in_array($this->roleForCompany($company), ['owner', 'finance'], true);
+    }
+
     /**
      * Get the attributes that should be cast.
      *

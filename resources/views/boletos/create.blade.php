@@ -16,11 +16,6 @@
             @error('boleto_pdf') <span class="error">{{ $message }}</span> @enderror
         </label>
 
-        <div class="card" style="background:#f8fafc;">
-            <strong>Primeira versao da automacao</strong>
-            <p class="subtitle" style="margin-top:8px;">A leitura funciona melhor com PDF gerado digitalmente. PDF escaneado ou foto vai precisar de OCR em uma etapa futura.</p>
-        </div>
-
         <div class="actions">
             <button class="btn" type="submit">Ler boleto</button>
             <a class="btn secondary" href="{{ route('dashboard') }}">Cancelar</a>
