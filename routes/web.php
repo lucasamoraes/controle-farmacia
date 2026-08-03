@@ -5,6 +5,7 @@ use App\Http\Controllers\BoletoUploadController;
 use App\Http\Controllers\CompanyUserController;
 use App\Http\Controllers\DailySalesImportController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\MonthlyRevenueController;
 use App\Http\Controllers\PayableController;
 use App\Http\Controllers\ProductionInstallController;
@@ -61,6 +62,18 @@ Route::middleware('auth')->group(function () {
         Route::patch('fornecedores/{fornecedore}', [SupplierController::class, 'update']);
         Route::delete('fornecedores/{fornecedore}', [SupplierController::class, 'destroy'])->name('fornecedores.destroy');
         Route::patch('fornecedores/{fornecedore}/reativar', [SupplierController::class, 'restore'])->name('fornecedores.restore');
+    });
+
+    Route::get('funcionarios', [EmployeeController::class, 'index'])->name('funcionarios.index');
+    Route::middleware('company.role:owner,finance')->group(function () {
+        Route::get('funcionarios/create', [EmployeeController::class, 'create'])->name('funcionarios.create');
+        Route::post('funcionarios', [EmployeeController::class, 'store'])->name('funcionarios.store');
+        Route::get('funcionarios/{funcionario}/edit', [EmployeeController::class, 'edit'])->name('funcionarios.edit');
+        Route::put('funcionarios/{funcionario}', [EmployeeController::class, 'update'])->name('funcionarios.update');
+        Route::patch('funcionarios/{funcionario}', [EmployeeController::class, 'update']);
+        Route::delete('funcionarios/{funcionario}', [EmployeeController::class, 'destroy'])->name('funcionarios.destroy');
+        Route::patch('funcionarios/{funcionario}/reativar', [EmployeeController::class, 'restore'])->name('funcionarios.restore');
+        Route::post('funcionarios/gerar-despesas', [EmployeeController::class, 'generateMonthlyPayables'])->name('funcionarios.generate-payables');
     });
 
     Route::middleware('company.role:owner,finance')->group(function () {

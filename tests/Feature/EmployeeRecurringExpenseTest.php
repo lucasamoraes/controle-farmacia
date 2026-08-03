@@ -1,0 +1,95 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Company;
+use App\Models\Employee;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class EmployeeRecurringExpenseTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_finance_user_can_generate_monthly_employee_expenses(): void
+    {
+        [$company, $finance] = $this->companyWithUser('finance');
+        $employee = Employee::create([
+            'company_id' => $company->id,
+            'name' => 'Ana Caixa',
+            'role' => 'Caixa',
+            'salary' => 2500,
+            'payment_day' => 5,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($finance)
+            ->post('/funcionarios/gerar-despesas', ['mes' => '2026-08'])
+            ->assertRedirect('/funcionarios?mes=2026-08');
+
+        $this->assertDatabaseHas('financial_categories', [
+            'company_id' => $company->id,
+            'name' => 'Funcionarios',
+            'type' => 'expense',
+        ]);
+
+        $this->assertDatabaseHas('payables', [
+            'company_id' => $company->id,
+            'description' => 'Salario - Ana Caixa',
+            'amount' => 2500,
+            'due_date' => '2026-08-05 00:00:00',
+            'status' => 'open',
+            'source' => 'employee_recurring',
+            'document_number' => 'FUNC-'.$employee->id.'-2026-08',
+        ]);
+    }
+
+    public function test_generating_employee_expenses_twice_does_not_duplicate_payables(): void
+    {
+        [$company, $owner] = $this->companyWithUser('owner');
+        Employee::create([
+            'company_id' => $company->id,
+            'name' => 'Bruno Balcao',
+            'salary' => 1800,
+            'payment_day' => 31,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($owner)->post('/funcionarios/gerar-despesas', ['mes' => '2026-02']);
+        $this->actingAs($owner)->post('/funcionarios/gerar-despesas', ['mes' => '2026-02']);
+
+        $this->assertDatabaseCount('payables', 1);
+        $this->assertDatabaseHas('payables', [
+            'description' => 'Salario - Bruno Balcao',
+            'due_date' => '2026-02-28 00:00:00',
+        ]);
+    }
+
+    public function test_viewer_can_view_employees_but_cannot_generate_expenses(): void
+    {
+        [, $viewer] = $this->companyWithUser('viewer');
+
+        $this->actingAs($viewer)
+            ->get('/funcionarios')
+            ->assertOk()
+            ->assertDontSee('Novo funcionario');
+
+        $this->actingAs($viewer)
+            ->post('/funcionarios/gerar-despesas', ['mes' => '2026-08'])
+            ->assertForbidden();
+    }
+
+    private function companyWithUser(string $role): array
+    {
+        $company = Company::create([
+            'name' => 'Farmacia Teste',
+            'trade_name' => 'Farmacia Teste',
+        ]);
+        $user = User::factory()->create();
+
+        $company->users()->attach($user->id, ['role' => $role]);
+
+        return [$company, $user];
+    }
+}

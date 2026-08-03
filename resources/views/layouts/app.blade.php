@@ -132,6 +132,7 @@
                     <a href="{{ route('resumo.index') }}" class="{{ request()->routeIs('resumo.*') ? 'active' : '' }}">Resumo</a>
                     <a href="{{ route('faturamento-mensal.index') }}" class="{{ request()->routeIs('faturamento-mensal.*') ? 'active' : '' }}">Faturamento</a>
                     <a href="{{ route('fornecedores.index') }}" class="{{ request()->routeIs('fornecedores.*') ? 'active' : '' }}">Fornecedores</a>
+                    <a href="{{ route('funcionarios.index') }}" class="{{ request()->routeIs('funcionarios.*') ? 'active' : '' }}">Funcionarios</a>
                     <a href="{{ route('contas-a-pagar.index') }}" class="{{ request()->routeIs('contas-a-pagar.*') ? 'active' : '' }}">Contas a pagar</a>
                     @if (auth()->user()->canWriteFinance($company))
                         <a href="{{ route('boletos.create') }}" class="{{ request()->routeIs('boletos.*') ? 'active' : '' }}">Boletos PDF</a>
