@@ -30,7 +30,7 @@ class BoletoUploadController extends Controller
     {
         $company = $this->company();
         $data = $request->validate([
-            'boleto_pdf' => ['required', 'file', 'mimes:pdf', 'max:10240'],
+            'boleto_pdf' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
         ]);
 
         $file = $data['boleto_pdf'];
@@ -121,9 +121,11 @@ class BoletoUploadController extends Controller
     private function processUpload(BoletoUpload $upload, PdfTextExtractor $extractor, BoletoParser $boletoParser, CnpjLookupService $cnpjLookup, OcrService $ocrService, ?string $password = null): RedirectResponse
     {
         try {
-            $result = $extractor->extract(Storage::path($upload->stored_path), $password);
+            $storedPath = Storage::path($upload->stored_path);
+            $isImage = $this->isImageFile($upload->original_file_name);
+            $result = $isImage ? ['text' => ''] : $extractor->extract($storedPath, $password);
 
-            if (($result['password_required'] ?? false) === true) {
+            if (! $isImage && ($result['password_required'] ?? false) === true) {
                 $upload->update([
                     'processing_status' => 'password_required',
                     'error_message' => $result['error'] ?? 'PDF protegido por senha.',
@@ -135,19 +137,19 @@ class BoletoUploadController extends Controller
             $text = $result['text'] ?? '';
             $usedOcr = false;
 
-            if ($this->needsOcr($text)) {
+            if ($isImage || $this->needsOcr($text)) {
                 if (! $ocrService->isEnabled()) {
                     $upload->update([
                         'extracted_text' => $text,
                         'parsed_data' => ['ocr_required' => true],
                         'processing_status' => 'failed',
-                        'error_message' => 'O PDF parece ser escaneado. Configure o OCR para ler boletos em imagem.',
+                        'error_message' => 'Configure o OCR para ler boletos em imagem.',
                     ]);
 
-                    return redirect()->route('boletos.create')->with('status', 'O PDF parece ser escaneado. Cadastre manualmente por enquanto ou configure o OCR.');
+                    return redirect()->route('boletos.create')->with('status', 'Este arquivo precisa de OCR. Cadastre manualmente por enquanto ou configure o OCR.');
                 }
 
-                $text = $ocrService->extractText(Storage::path($upload->stored_path));
+                $text = $ocrService->extractText($storedPath);
                 $usedOcr = true;
             }
 
@@ -185,6 +187,11 @@ class BoletoUploadController extends Controller
         }
 
         return ! preg_match('/\d{5}\.?\d{5}\s+\d{5}\.?\d{6}|vencimento|cedente|beneficiario|beneficiario/i', $text);
+    }
+
+    private function isImageFile(string $fileName): bool
+    {
+        return in_array(strtolower(pathinfo($fileName, PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp'], true);
     }
 
     private function reviewData(Company $company, BoletoUpload $boleto): array
