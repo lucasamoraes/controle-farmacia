@@ -68,12 +68,13 @@ Route::middleware('auth')->group(function () {
     Route::middleware('company.role:owner,finance')->group(function () {
         Route::get('funcionarios/create', [EmployeeController::class, 'create'])->name('funcionarios.create');
         Route::post('funcionarios', [EmployeeController::class, 'store'])->name('funcionarios.store');
+        Route::post('funcionarios/gerar-despesas', [EmployeeController::class, 'generateMonthlyPayables'])->name('funcionarios.generate-payables');
+        Route::patch('funcionarios/pagar-folha', [EmployeeController::class, 'markPayrollAsPaid'])->name('funcionarios.mark-payroll-paid');
         Route::get('funcionarios/{funcionario}/edit', [EmployeeController::class, 'edit'])->name('funcionarios.edit');
         Route::put('funcionarios/{funcionario}', [EmployeeController::class, 'update'])->name('funcionarios.update');
         Route::patch('funcionarios/{funcionario}', [EmployeeController::class, 'update']);
         Route::delete('funcionarios/{funcionario}', [EmployeeController::class, 'destroy'])->name('funcionarios.destroy');
         Route::patch('funcionarios/{funcionario}/reativar', [EmployeeController::class, 'restore'])->name('funcionarios.restore');
-        Route::post('funcionarios/gerar-despesas', [EmployeeController::class, 'generateMonthlyPayables'])->name('funcionarios.generate-payables');
     });
 
     Route::middleware('company.role:owner,finance')->group(function () {

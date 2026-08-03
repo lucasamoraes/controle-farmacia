@@ -2,6 +2,7 @@
 
 @php
     $fmtMoney = fn ($value) => 'R$ ' . number_format((float) $value, 2, ',', '.');
+    $fmtPercent = fn ($value) => $value === null ? '-' : number_format((float) $value, 1, ',', '.') . '%';
     $maxStatus = max(collect($statusTotals)->max('value') ?? 0, 1);
     $maxSupplier = max((float) $topSuppliers->max('total'), 1);
     $maxCategory = max((float) $categoryTotals->max('total'), 1);
@@ -115,6 +116,20 @@
             <div class="card"><div class="metric-label">Aberto no mes</div><div class="metric-value">{{ $fmtMoney($openTotal) }}</div></div>
             <div class="card"><div class="metric-label">Vencido no mes</div><div class="metric-value" style="color:var(--danger);">{{ $fmtMoney($overdueTotal) }}</div></div>
             <div class="card"><div class="metric-label">Pago no mes</div><div class="metric-value">{{ $fmtMoney($paidMonthTotal) }}</div></div>
+        </div>
+
+        <div class="grid" style="grid-template-columns:repeat(4, minmax(0, 1fr)); margin-bottom:18px;">
+            <div class="card"><div class="metric-label">Faturamento {{ $financeSummary['monthLabel'] }}</div><div class="metric-value">{{ $fmtMoney($financeSummary['grossRevenue']) }}</div></div>
+            <div class="card"><div class="metric-label">Despesas do mes</div><div class="metric-value">{{ $fmtMoney($financeSummary['expenses']) }}</div></div>
+            <div class="card"><div class="metric-label">Compras mercadoria</div><div class="metric-value">{{ $fmtMoney($financeSummary['stockPurchases']) }}</div></div>
+            <div class="card"><div class="metric-label">Resultado estimado</div><div class="metric-value" style="color:{{ $financeSummary['profitEstimate'] >= 0 ? 'var(--brand)' : 'var(--danger)' }};">{{ $fmtMoney($financeSummary['profitEstimate']) }}</div></div>
+        </div>
+
+        <div class="grid" style="grid-template-columns:repeat(4, minmax(0, 1fr)); margin-bottom:18px;">
+            <div class="card"><div class="metric-label">Despesas / faturamento</div><div class="metric-value">{{ $fmtPercent($financeSummary['expensesVsRevenue']) }}</div></div>
+            <div class="card"><div class="metric-label">Despesas / fat. anterior</div><div class="metric-value">{{ $fmtPercent($financeSummary['expensesVsPreviousRevenue']) }}</div></div>
+            <div class="card"><div class="metric-label">Vendas</div><div class="metric-value">{{ number_format($financeSummary['salesCount'], 0, ',', '.') }}</div></div>
+            <div class="card"><div class="metric-label">Ticket medio</div><div class="metric-value">{{ $fmtMoney($financeSummary['averageTicket']) }}</div></div>
         </div>
 
         <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-bottom:18px;">

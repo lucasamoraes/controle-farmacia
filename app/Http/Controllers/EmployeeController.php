@@ -129,8 +129,6 @@ class EmployeeController extends Controller
 
         $monthStart = Carbon::createFromFormat('Y-m-d', "{$data['mes']}-01")->startOfMonth();
         $monthEnd = $monthStart->copy()->endOfMonth();
-        $created = 0;
-        $skipped = 0;
 
         $employees = $company->employees()
             ->where('is_active', true)
@@ -143,67 +141,68 @@ class EmployeeController extends Controller
             ->orderBy('name')
             ->get();
 
-        foreach ($employees as $employee) {
-            $fixedDocument = sprintf('FUNC-FIXO-%d-%s', $employee->id, $monthStart->format('Y-m'));
-            $variableDocument = sprintf('FUNC-VARIAVEL-%d-%s', $employee->id, $monthStart->format('Y-m'));
+        $fixedTotal = (float) $employees->sum('fixed_salary');
+        $variableTotal = (float) $employees->sum('variable_salary');
+        $dueDay = (int) min(max((int) ($employees->max('payment_day') ?: 5), 1), (int) $monthEnd->format('d'));
+        $dueDate = $monthStart->copy()->day($dueDay);
+        $created = 0;
+        $updated = 0;
 
-            $fixedExists = $company->payables()
-                ->whereIn('source', ['employee_recurring', 'employee_fixed'])
-                ->whereIn('document_number', [$fixedDocument, sprintf('FUNC-%d-%s', $employee->id, $monthStart->format('Y-m'))])
-                ->exists();
+        if ($fixedTotal > 0) {
+            [$wasCreated] = $this->upsertPayrollPayable(
+                $company,
+                $category,
+                'Folha funcionarios fixa - '.$monthStart->format('m/Y'),
+                $fixedTotal,
+                $dueDate,
+                'employee_fixed',
+                'FUNC-FOLHA-FIXA-'.$monthStart->format('Y-m')
+            );
+            $wasCreated ? $created++ : $updated++;
+        }
 
-            if ($fixedExists) {
-                $skipped++;
-            } elseif ((float) $employee->fixed_salary > 0) {
-                $dueDay = min(max((int) $employee->payment_day, 1), (int) $monthEnd->format('d'));
-                $dueDate = $monthStart->copy()->day($dueDay);
-
-                $company->payables()->create([
-                    'financial_category_id' => $category->id,
-                    'description' => 'Salario fixo - '.$employee->name,
-                    'amount' => $employee->fixed_salary,
-                    'due_date' => $dueDate->toDateString(),
-                    'status' => 'open',
-                    'source' => 'employee_fixed',
-                    'document_number' => $fixedDocument,
-                    'notes' => trim((string) $employee->role) !== '' ? 'Cargo: '.$employee->role : null,
-                ]);
-                $created++;
-            }
-
-            if ((float) $employee->variable_salary <= 0) {
-                continue;
-            }
-
-            $variableExists = $company->payables()
-                ->where('source', 'employee_variable')
-                ->where('document_number', $variableDocument)
-                ->exists();
-
-            if ($variableExists) {
-                $skipped++;
-                continue;
-            }
-
-            $dueDay = min(max((int) $employee->payment_day, 1), (int) $monthEnd->format('d'));
-            $dueDate = $monthStart->copy()->day($dueDay);
-
-            $company->payables()->create([
-                'financial_category_id' => $category->id,
-                'description' => 'Salario variavel - '.$employee->name,
-                'amount' => $employee->variable_salary,
-                'due_date' => $dueDate->toDateString(),
-                'status' => 'open',
-                'source' => 'employee_variable',
-                'document_number' => $variableDocument,
-                'notes' => trim((string) $employee->role) !== '' ? 'Cargo: '.$employee->role : null,
-            ]);
-            $created++;
+        if ($variableTotal > 0) {
+            [$wasCreated] = $this->upsertPayrollPayable(
+                $company,
+                $category,
+                'Folha funcionarios variavel - '.$monthStart->format('m/Y'),
+                $variableTotal,
+                $dueDate,
+                'employee_variable',
+                'FUNC-FOLHA-VARIAVEL-'.$monthStart->format('Y-m')
+            );
+            $wasCreated ? $created++ : $updated++;
         }
 
         return redirect()
             ->route('funcionarios.index', ['mes' => $data['mes']])
-            ->with('status', "Despesas geradas: {$created}. Ja existentes: {$skipped}.");
+            ->with('status', "Folha gerada: {$created} nova(s), {$updated} atualizada(s).");
+    }
+
+    public function markPayrollAsPaid(Request $request): RedirectResponse
+    {
+        $company = $this->company();
+        $category = $this->employeeCategory($company);
+        $data = $request->validate([
+            'mes' => ['required', 'date_format:Y-m'],
+        ]);
+
+        $monthStart = Carbon::createFromFormat('Y-m-d', "{$data['mes']}-01")->startOfMonth();
+        $monthEnd = $monthStart->copy()->endOfMonth();
+
+        $updated = $company->payables()
+            ->where('financial_category_id', $category->id)
+            ->whereBetween('due_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->where('status', 'open')
+            ->update([
+                'status' => 'paid',
+                'paid_at' => now()->toDateString(),
+                'updated_at' => now(),
+            ]);
+
+        return redirect()
+            ->route('funcionarios.index', ['mes' => $data['mes']])
+            ->with('status', "Folha paga: {$updated} despesa(s) marcada(s) como pagas.");
     }
 
     private function validated(Request $request): array
@@ -233,6 +232,38 @@ class EmployeeController extends Controller
             ['name' => 'Funcionarios', 'type' => 'expense'],
             ['is_default' => true, 'is_active' => true]
         );
+    }
+
+    private function upsertPayrollPayable(Company $company, FinancialCategory $category, string $description, float $amount, Carbon $dueDate, string $source, string $documentNumber): array
+    {
+        $payable = $company->payables()
+            ->where('source', $source)
+            ->where('document_number', $documentNumber)
+            ->first();
+
+        if ($payable) {
+            if ($payable->status === 'open') {
+                $payable->update([
+                    'financial_category_id' => $category->id,
+                    'description' => $description,
+                    'amount' => $amount,
+                    'due_date' => $dueDate->toDateString(),
+                ]);
+            }
+
+            return [false, $payable];
+        }
+
+        return [true, $company->payables()->create([
+            'financial_category_id' => $category->id,
+            'description' => $description,
+            'amount' => $amount,
+            'due_date' => $dueDate->toDateString(),
+            'status' => 'open',
+            'source' => $source,
+            'document_number' => $documentNumber,
+            'notes' => 'Despesa consolidada da folha de funcionarios.',
+        ])];
     }
 
     private function validMonth(mixed $value): ?string

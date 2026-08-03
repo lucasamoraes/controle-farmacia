@@ -38,22 +38,22 @@ class EmployeeRecurringExpenseTest extends TestCase
 
         $this->assertDatabaseHas('payables', [
             'company_id' => $company->id,
-            'description' => 'Salario fixo - Ana Caixa',
+            'description' => 'Folha funcionarios fixa - 08/2026',
             'amount' => 2500,
             'due_date' => '2026-08-05 00:00:00',
             'status' => 'open',
             'source' => 'employee_fixed',
-            'document_number' => 'FUNC-FIXO-'.$employee->id.'-2026-08',
+            'document_number' => 'FUNC-FOLHA-FIXA-2026-08',
         ]);
 
         $this->assertDatabaseHas('payables', [
             'company_id' => $company->id,
-            'description' => 'Salario variavel - Ana Caixa',
+            'description' => 'Folha funcionarios variavel - 08/2026',
             'amount' => 300,
             'due_date' => '2026-08-05 00:00:00',
             'status' => 'open',
             'source' => 'employee_variable',
-            'document_number' => 'FUNC-VARIAVEL-'.$employee->id.'-2026-08',
+            'document_number' => 'FUNC-FOLHA-VARIAVEL-2026-08',
         ]);
     }
 
@@ -74,8 +74,32 @@ class EmployeeRecurringExpenseTest extends TestCase
 
         $this->assertDatabaseCount('payables', 1);
         $this->assertDatabaseHas('payables', [
-            'description' => 'Salario fixo - Bruno Balcao',
+            'description' => 'Folha funcionarios fixa - 02/2026',
             'due_date' => '2026-02-28 00:00:00',
+        ]);
+    }
+
+    public function test_finance_user_can_mark_monthly_payroll_as_paid(): void
+    {
+        [$company, $finance] = $this->companyWithUser('finance');
+        Employee::create([
+            'company_id' => $company->id,
+            'name' => 'Carla Gerente',
+            'salary' => 3200,
+            'fixed_salary' => 3200,
+            'payment_day' => 5,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($finance)->post('/funcionarios/gerar-despesas', ['mes' => '2026-08']);
+
+        $this->actingAs($finance)
+            ->patch('/funcionarios/pagar-folha', ['mes' => '2026-08'])
+            ->assertRedirect('/funcionarios?mes=2026-08');
+
+        $this->assertDatabaseHas('payables', [
+            'description' => 'Folha funcionarios fixa - 08/2026',
+            'status' => 'paid',
         ]);
     }
 

@@ -55,19 +55,27 @@
     </div>
 
     @if ($canWriteFinance)
-        <form class="card" method="post" action="{{ route('funcionarios.generate-payables') }}" data-confirm-title="Gerar despesas" data-confirm-message="Deseja gerar as despesas de salario dos funcionarios ativos para este mes? O sistema vai ignorar despesas ja geradas." data-confirm-button="Gerar despesas">
-            @csrf
+        <div class="card">
             <div class="actions" style="justify-content:space-between; align-items:end;">
-                <label style="max-width:220px;">Mes
-                    <input type="month" name="mes" value="{{ $month }}" required>
-                </label>
-                <div>
-                    <h2 class="panel-title" style="margin-bottom:4px;">Despesas recorrentes</h2>
-                    <p class="subtitle">Gera salario fixo recorrente e salario variavel apenas quando houver valor preenchido.</p>
+                <form method="post" action="{{ route('funcionarios.generate-payables') }}" data-confirm-title="Gerar folha" data-confirm-message="Deseja gerar a folha consolidada deste mes? Se a folha ainda estiver aberta, o sistema atualiza os valores." data-confirm-button="Gerar folha">
+                    @csrf
+                    <label style="max-width:220px;">Mes
+                        <input type="month" name="mes" value="{{ $month }}" required>
+                    </label>
+                    <button class="btn" type="submit" style="margin-top:10px;">Gerar folha do mes</button>
+                </form>
+                <div style="min-width:220px;">
+                    <h2 class="panel-title" style="margin-bottom:4px;">Folha consolidada</h2>
+                    <p class="subtitle">O fixo e o variavel entram como despesas do mes, sem criar uma conta por funcionario.</p>
                 </div>
-                <button class="btn" type="submit">Gerar despesas do mes</button>
+                <form method="post" action="{{ route('funcionarios.mark-payroll-paid') }}" data-confirm-title="Pagar folha" data-confirm-message="Deseja marcar a folha aberta deste mes como paga?" data-confirm-button="Pagar folha">
+                    @csrf
+                    @method('patch')
+                    <input type="hidden" name="mes" value="{{ $month }}">
+                    <button class="btn secondary" type="submit">Pagar folha do mes</button>
+                </form>
             </div>
-        </form>
+        </div>
     @endif
 
     <div class="grid" style="grid-template-columns:1fr; margin-top:22px;">

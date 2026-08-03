@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home1/luca6802/controle.amplificati.com.br/
+    - /bin/echo "Deploy concluido em $DEPLOYPATH"

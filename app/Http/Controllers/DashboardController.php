@@ -87,6 +87,7 @@ class DashboardController extends Controller
             'weekdayAverageChart' => $this->weekdayAverageChart($company, $dateStart, $dateEnd),
             'channelRevenueChart' => $this->channelRevenueChart($company),
             'monthlyExpenseChart' => $this->monthlyExpenseChart($company),
+            'financeSummary' => $this->financeSummary($company, $dateStart),
             'employeeDashboard' => $this->employeeDashboard($company, $dateStart, $dateEnd),
             'financialAlerts' => $alerts->dashboardAlerts($company),
             'suppliersCount' => $company->suppliers()->count(),
@@ -268,6 +269,46 @@ class DashboardController extends Controller
                 ->take(5)
                 ->values()
                 ->all(),
+        ];
+    }
+
+    private function financeSummary(Company $company, ?string $dateStart): array
+    {
+        $month = $dateStart
+            ? Carbon::parse($dateStart)->startOfMonth()
+            : now()->startOfMonth();
+        $previousMonth = $month->copy()->subMonth();
+        $monthStart = $month->copy()->startOfMonth();
+        $monthEnd = $month->copy()->endOfMonth();
+        $revenue = $company->monthlyRevenues()->whereDate('reference_month', $monthStart)->first();
+        $previousRevenue = $company->monthlyRevenues()->whereDate('reference_month', $previousMonth->copy()->startOfMonth())->first();
+        $expenses = (float) $company->payables()
+            ->whereBetween('due_date', [$monthStart, $monthEnd])
+            ->where('status', '!=', 'cancelled')
+            ->sum('amount');
+        $stockPurchases = (float) $company->payables()
+            ->leftJoin('financial_categories', 'financial_categories.id', '=', 'payables.financial_category_id')
+            ->whereBetween('payables.due_date', [$monthStart, $monthEnd])
+            ->where('payables.status', '!=', 'cancelled')
+            ->where(function ($query) {
+                $query->where('financial_categories.name', 'like', '%mercadoria%')
+                    ->orWhere('financial_categories.name', 'like', '%estoque%');
+            })
+            ->sum('payables.amount');
+        $grossRevenue = (float) ($revenue->gross_revenue ?? 0);
+        $previousGrossRevenue = (float) ($previousRevenue->gross_revenue ?? 0);
+
+        return [
+            'monthLabel' => $month->format('m/Y'),
+            'grossRevenue' => $grossRevenue,
+            'expenses' => $expenses,
+            'stockPurchases' => $stockPurchases,
+            'profitEstimate' => $grossRevenue - $expenses,
+            'expensesVsRevenue' => $grossRevenue > 0 ? ($expenses / $grossRevenue) * 100 : null,
+            'expensesVsPreviousRevenue' => $previousGrossRevenue > 0 ? ($expenses / $previousGrossRevenue) * 100 : null,
+            'salesCount' => (int) ($revenue->sales_count ?? 0),
+            'averageTicket' => (float) ($revenue->average_ticket ?? 0),
+            'cmvPercentage' => (float) ($revenue->cmv_percentage ?? 0),
         ];
     }
 
