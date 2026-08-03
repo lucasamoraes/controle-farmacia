@@ -37,12 +37,12 @@
 
     <div class="grid stats">
         <div class="card">
-            <div class="metric-label">Folha ativa</div>
-            <div class="metric-value">R$ {{ number_format($activePayrollTotal, 2, ',', '.') }}</div>
+            <div class="metric-label">Folha fixa ativa</div>
+            <div class="metric-value">R$ {{ number_format($activeFixedPayrollTotal, 2, ',', '.') }}</div>
         </div>
         <div class="card">
-            <div class="metric-label">Despesas do mes</div>
-            <div class="metric-value">R$ {{ number_format($monthExpenseTotal, 2, ',', '.') }}</div>
+            <div class="metric-label">Variavel previsto</div>
+            <div class="metric-value">R$ {{ number_format($activeVariablePayrollTotal, 2, ',', '.') }}</div>
         </div>
         <div class="card">
             <div class="metric-label">Aberto no mes</div>
@@ -63,7 +63,7 @@
                 </label>
                 <div>
                     <h2 class="panel-title" style="margin-bottom:4px;">Despesas recorrentes</h2>
-                    <p class="subtitle">Gera contas a pagar na categoria Funcionarios, uma por funcionario ativo.</p>
+                    <p class="subtitle">Gera salario fixo recorrente e salario variavel apenas quando houver valor preenchido.</p>
                 </div>
                 <button class="btn" type="submit">Gerar despesas do mes</button>
             </div>
@@ -75,7 +75,7 @@
             <h2 class="panel-title">Equipe</h2>
             <div class="table-wrap"><table>
                 <thead>
-                    <tr><th>Nome</th><th>Cargo</th><th>Salario</th><th>Pagamento</th><th>Status</th><th></th></tr>
+                    <tr><th>Nome</th><th>Cargo</th><th>Fixo</th><th>Variavel</th><th>Pagamento</th><th>Status</th><th></th></tr>
                 </thead>
                 <tbody>
                 @forelse ($employees as $employee)
@@ -87,7 +87,8 @@
                             @endif
                         </td>
                         <td>{{ $employee->role ?? '-' }}</td>
-                        <td>R$ {{ number_format($employee->salary, 2, ',', '.') }}</td>
+                        <td>R$ {{ number_format($employee->fixed_salary, 2, ',', '.') }}</td>
+                        <td>R$ {{ number_format($employee->variable_salary, 2, ',', '.') }}</td>
                         <td>Dia {{ $employee->payment_day }}</td>
                         <td><span class="status {{ $employee->is_active ? 'paid' : 'cancelled' }}">{{ $employee->is_active ? 'Ativo' : 'Inativo' }}</span></td>
                         <td class="actions">
@@ -110,7 +111,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6">Nenhum funcionario cadastrado.</td></tr>
+                    <tr><td colspan="7">Nenhum funcionario cadastrado.</td></tr>
                 @endforelse
                 </tbody>
             </table></div>

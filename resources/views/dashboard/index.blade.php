@@ -9,7 +9,16 @@
     $maxWeekday = max(collect($weekdayAverageChart)->max('value') ?? 0, 1);
     $maxChannel = max(collect($channelRevenueChart)->map(fn ($row) => ($row['delivery'] ?? 0) + ($row['counter'] ?? 0))->max() ?? 0, 1);
     $maxExpense = max(collect($monthlyExpenseChart)->max('value') ?? 0, 1);
+    $maxEmployeeMonth = max(collect($employeeDashboard['monthly'])->max('total') ?? 0, 1);
+    $maxEmployeeTop = max(collect($employeeDashboard['topEmployees'])->max('total') ?? 0, 1);
     $canWriteFinance = auth()->user()->canWriteFinance($company);
+    $tabFilters = array_filter([
+        'periodo' => $period,
+        'inicio' => $dateStart,
+        'fim' => $dateEnd,
+        'status' => $statusFilter,
+        'busca' => $search,
+    ], fn ($value) => $value !== null && $value !== '');
 @endphp
 
 @section('content')
@@ -47,7 +56,14 @@
         </div>
     @endif
 
+    <div class="quick-filters" style="margin:20px 0 0;">
+        <a class="quick-filter {{ $dashboardTab === 'financeiro' ? 'active' : '' }}" href="{{ route('dashboard', array_merge($tabFilters, ['aba' => 'financeiro'])) }}">Financeiro</a>
+        <a class="quick-filter {{ $dashboardTab === 'funcionarios' ? 'active' : '' }}" href="{{ route('dashboard', array_merge($tabFilters, ['aba' => 'funcionarios'])) }}">Funcionarios</a>
+        <a class="quick-filter {{ $dashboardTab === 'vendas' ? 'active' : '' }}" href="{{ route('dashboard', array_merge($tabFilters, ['aba' => 'vendas'])) }}">Vendas</a>
+    </div>
+
     <form class="filter-bar" method="get" action="{{ route('dashboard') }}">
+        <input type="hidden" name="aba" value="{{ $dashboardTab }}">
         <div class="filter-grid" style="grid-template-columns:180px 170px 170px 170px auto;">
             <label>Periodo
                 <select name="periodo">
@@ -93,76 +109,116 @@
         </div>
     </form>
 
-    <div class="grid stats">
-        <div class="card"><div class="metric-label">Total filtrado</div><div class="metric-value">{{ $fmtMoney($totalFiltered) }}</div></div>
-        <div class="card"><div class="metric-label">Aberto no mes</div><div class="metric-value">{{ $fmtMoney($openTotal) }}</div></div>
-        <div class="card"><div class="metric-label">Vencido no mes</div><div class="metric-value" style="color:var(--danger);">{{ $fmtMoney($overdueTotal) }}</div></div>
-        <div class="card"><div class="metric-label">Pago no mes</div><div class="metric-value">{{ $fmtMoney($paidMonthTotal) }}</div></div>
-    </div>
+    @if ($dashboardTab === 'financeiro')
+        <div class="grid stats">
+            <div class="card"><div class="metric-label">Total filtrado</div><div class="metric-value">{{ $fmtMoney($totalFiltered) }}</div></div>
+            <div class="card"><div class="metric-label">Aberto no mes</div><div class="metric-value">{{ $fmtMoney($openTotal) }}</div></div>
+            <div class="card"><div class="metric-label">Vencido no mes</div><div class="metric-value" style="color:var(--danger);">{{ $fmtMoney($overdueTotal) }}</div></div>
+            <div class="card"><div class="metric-label">Pago no mes</div><div class="metric-value">{{ $fmtMoney($paidMonthTotal) }}</div></div>
+        </div>
 
-    <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-bottom:18px;">
-        <section class="card">
-            <h2 class="panel-title">Status das contas</h2>
-            <div class="bar-list">
-                @foreach ($statusTotals as $row)
-                    @php $value = (float) $row['value']; @endphp
-                    <div class="bar-row">
-                        <div class="bar-meta"><span>{{ $row['label'] }}</span><span>{{ $fmtMoney($value) }}</span></div>
-                        <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($value / $maxStatus) * 100) }}%; --c:{{ $row['color'] }};"></div></div>
-                    </div>
-                @endforeach
-            </div>
-        </section>
-
-        <section class="card">
-            <h2 class="panel-title">Top 5 fornecedores</h2>
-            <div class="bar-list">
-                @forelse ($topSuppliers as $row)
-                    @php $value = (float) $row->total; @endphp
-                    <div class="bar-row">
-                        <div class="bar-meta"><span>{{ $row->name }}</span><span>{{ $fmtMoney($value) }}</span></div>
-                        <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($value / $maxSupplier) * 100) }}%; --c:#2563eb;"></div></div>
-                    </div>
-                @empty
-                    <p class="subtitle">Nenhum gasto no filtro selecionado.</p>
-                @endforelse
-            </div>
-        </section>
-    </div>
-
-    <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-bottom:18px;">
-        <section class="card">
-            <h2 class="panel-title">Faturamento mensal</h2>
-            <div class="bar-list">
-                @forelse ($monthlyRevenueChart as $row)
-                    @php $growth = $row['growth']; @endphp
-                    <div class="bar-row">
-                        <div class="bar-meta">
-                            <span>{{ $row['label'] }}</span>
-                            <span>{{ $fmtMoney($row['value']) }} @if($growth !== null)<small style="color:{{ $growth >= 0 ? 'var(--brand)' : 'var(--danger)' }};">({{ $growth >= 0 ? '+' : '' }}{{ number_format($growth, 1, ',', '.') }}%)</small>@endif</span>
+        <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-bottom:18px;">
+            <section class="card">
+                <h2 class="panel-title">Status das contas</h2>
+                <div class="bar-list">
+                    @foreach ($statusTotals as $row)
+                        @php $value = (float) $row['value']; @endphp
+                        <div class="bar-row">
+                            <div class="bar-meta"><span>{{ $row['label'] }}</span><span>{{ $fmtMoney($value) }}</span></div>
+                            <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($value / $maxStatus) * 100) }}%; --c:{{ $row['color'] }};"></div></div>
                         </div>
-                        <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($row['value'] / $maxRevenue) * 100) }}%; --c:#2563eb;"></div></div>
-                    </div>
-                @empty
-                    <p class="subtitle">Nenhum faturamento mensal cadastrado.</p>
-                @endforelse
-            </div>
-        </section>
+                    @endforeach
+                </div>
+            </section>
 
-        <section class="card">
-            <h2 class="panel-title">Media por dia da semana</h2>
-            <div class="bar-list">
-                @foreach ($weekdayAverageChart as $row)
-                    <div class="bar-row">
-                        <div class="bar-meta"><span>{{ $row['label'] }}</span><span>{{ $fmtMoney($row['value']) }} <small style="color:var(--muted);">({{ $row['count'] }} dias)</small></span></div>
-                        <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($row['value'] / $maxWeekday) * 100) }}%; --c:var(--brand);"></div></div>
-                    </div>
-                @endforeach
-            </div>
-        </section>
-    </div>
+            <section class="card">
+                <h2 class="panel-title">Top 5 fornecedores</h2>
+                <div class="bar-list">
+                    @forelse ($topSuppliers as $row)
+                        @php $value = (float) $row->total; @endphp
+                        <div class="bar-row">
+                            <div class="bar-meta"><span>{{ $row->name }}</span><span>{{ $fmtMoney($value) }}</span></div>
+                            <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($value / $maxSupplier) * 100) }}%; --c:#2563eb;"></div></div>
+                        </div>
+                    @empty
+                        <p class="subtitle">Nenhum gasto no filtro selecionado.</p>
+                    @endforelse
+                </div>
+            </section>
+        </div>
 
-    <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-bottom:18px;">
+        <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-bottom:18px;">
+            <section class="card">
+                <h2 class="panel-title">Despesas mensais</h2>
+                <div class="bar-list">
+                    @forelse ($monthlyExpenseChart as $row)
+                        <div class="bar-row">
+                            <div class="bar-meta"><span>{{ $row['label'] }}</span><span>{{ $fmtMoney($row['value']) }}</span></div>
+                            <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($row['value'] / $maxExpense) * 100) }}%; --c:var(--danger);"></div></div>
+                        </div>
+                    @empty
+                        <p class="subtitle">Nenhuma despesa cadastrada.</p>
+                    @endforelse
+                </div>
+            </section>
+
+            <section class="card">
+                <h2 class="panel-title">Top categorias</h2>
+                <div class="bar-list">
+                    @forelse ($categoryTotals as $row)
+                        @php $value = (float) $row->total; @endphp
+                        <div class="bar-row">
+                            <div class="bar-meta"><span>{{ $row->name }}</span><span>{{ $fmtMoney($value) }}</span></div>
+                            <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($value / $maxCategory) * 100) }}%; --c:var(--brand);"></div></div>
+                        </div>
+                    @empty
+                        <p class="subtitle">Nenhuma categoria no filtro selecionado.</p>
+                    @endforelse
+                </div>
+            </section>
+        </div>
+    @endif
+
+    @if ($dashboardTab === 'vendas')
+        <div class="grid stats">
+            <div class="card"><div class="metric-label">Meses cadastrados</div><div class="metric-value">{{ count($monthlyRevenueChart) }}</div></div>
+            <div class="card"><div class="metric-label">Maior faturamento</div><div class="metric-value">{{ $fmtMoney($maxRevenue) }}</div></div>
+            <div class="card"><div class="metric-label">Maior media diaria</div><div class="metric-value">{{ $fmtMoney($maxWeekday) }}</div></div>
+            <div class="card"><div class="metric-label">Canais cadastrados</div><div class="metric-value">{{ count($channelRevenueChart) }}</div></div>
+        </div>
+
+        <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-bottom:18px;">
+            <section class="card">
+                <h2 class="panel-title">Faturamento mensal</h2>
+                <div class="bar-list">
+                    @forelse ($monthlyRevenueChart as $row)
+                        @php $growth = $row['growth']; @endphp
+                        <div class="bar-row">
+                            <div class="bar-meta">
+                                <span>{{ $row['label'] }}</span>
+                                <span>{{ $fmtMoney($row['value']) }} @if($growth !== null)<small style="color:{{ $growth >= 0 ? 'var(--brand)' : 'var(--danger)' }};">({{ $growth >= 0 ? '+' : '' }}{{ number_format($growth, 1, ',', '.') }}%)</small>@endif</span>
+                            </div>
+                            <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($row['value'] / $maxRevenue) * 100) }}%; --c:#2563eb;"></div></div>
+                        </div>
+                    @empty
+                        <p class="subtitle">Nenhum faturamento mensal cadastrado.</p>
+                    @endforelse
+                </div>
+            </section>
+
+            <section class="card">
+                <h2 class="panel-title">Media por dia da semana</h2>
+                <div class="bar-list">
+                    @foreach ($weekdayAverageChart as $row)
+                        <div class="bar-row">
+                            <div class="bar-meta"><span>{{ $row['label'] }}</span><span>{{ $fmtMoney($row['value']) }} <small style="color:var(--muted);">({{ $row['count'] }} dias)</small></span></div>
+                            <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($row['value'] / $maxWeekday) * 100) }}%; --c:var(--brand);"></div></div>
+                        </div>
+                    @endforeach
+                </div>
+            </section>
+        </div>
+
         <section class="card">
             <h2 class="panel-title">Faturamento por canal</h2>
             <div class="bar-list">
@@ -180,38 +236,49 @@
                 @endforelse
             </div>
         </section>
+    @endif
 
-        <section class="card">
-            <h2 class="panel-title">Despesas mensais</h2>
-            <div class="bar-list">
-                @forelse ($monthlyExpenseChart as $row)
-                    <div class="bar-row">
-                        <div class="bar-meta"><span>{{ $row['label'] }}</span><span>{{ $fmtMoney($row['value']) }}</span></div>
-                        <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($row['value'] / $maxExpense) * 100) }}%; --c:var(--danger);"></div></div>
-                    </div>
-                @empty
-                    <p class="subtitle">Nenhuma despesa cadastrada.</p>
-                @endforelse
-            </div>
-        </section>
-    </div>
+    @if ($dashboardTab === 'funcionarios')
+        <div class="grid stats">
+            <div class="card"><div class="metric-label">Funcionarios ativos</div><div class="metric-value">{{ $employeeDashboard['activeCount'] }}</div></div>
+            <div class="card"><div class="metric-label">Folha fixa ativa</div><div class="metric-value">{{ $fmtMoney($employeeDashboard['fixedTotal']) }}</div></div>
+            <div class="card"><div class="metric-label">Variavel previsto</div><div class="metric-value">{{ $fmtMoney($employeeDashboard['variableTotal']) }}</div></div>
+            <div class="card"><div class="metric-label">Aberto no periodo</div><div class="metric-value">{{ $fmtMoney($employeeDashboard['openTotal']) }}</div></div>
+        </div>
 
-    <div class="grid" style="grid-template-columns:1fr; align-items:start;">
-        <section class="card">
-            <h2 class="panel-title">Top categorias</h2>
-            <div class="bar-list">
-                @forelse ($categoryTotals as $row)
-                    @php $value = (float) $row->total; @endphp
-                    <div class="bar-row">
-                        <div class="bar-meta"><span>{{ $row->name }}</span><span>{{ $fmtMoney($value) }}</span></div>
-                        <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($value / $maxCategory) * 100) }}%; --c:var(--brand);"></div></div>
-                    </div>
-                @empty
-                    <p class="subtitle">Nenhuma categoria no filtro selecionado.</p>
-                @endforelse
-            </div>
-        </section>
-    </div>
+        <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-bottom:18px;">
+            <section class="card">
+                <h2 class="panel-title">Folha mensal</h2>
+                <div class="bar-list">
+                    @forelse ($employeeDashboard['monthly'] as $row)
+                        <div class="bar-row">
+                            <div class="bar-meta"><span>{{ $row['label'] }}</span><span>Fixo {{ $fmtMoney($row['fixed']) }} | Variavel {{ $fmtMoney($row['variable']) }}</span></div>
+                            <div class="bar-track" style="height:12px; display:flex;">
+                                <div style="height:100%; width:{{ $row['total'] > 0 ? ($row['fixed'] / $maxEmployeeMonth) * 100 : 0 }}%; background:var(--brand);"></div>
+                                <div style="height:100%; width:{{ $row['total'] > 0 ? ($row['variable'] / $maxEmployeeMonth) * 100 : 0 }}%; background:#2563eb;"></div>
+                            </div>
+                        </div>
+                    @empty
+                        <p class="subtitle">Nenhuma despesa de funcionario no periodo.</p>
+                    @endforelse
+                </div>
+            </section>
+
+            <section class="card">
+                <h2 class="panel-title">Top funcionarios</h2>
+                <div class="bar-list">
+                    @forelse ($employeeDashboard['topEmployees'] as $row)
+                        <div class="bar-row">
+                            <div class="bar-meta"><span>{{ $row['name'] }}</span><span>{{ $fmtMoney($row['total']) }}</span></div>
+                            <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($row['total'] / $maxEmployeeTop) * 100) }}%; --c:#2563eb;"></div></div>
+                        </div>
+                    @empty
+                        <p class="subtitle">Nenhum funcionario com despesa no periodo.</p>
+                    @endforelse
+                </div>
+            </section>
+        </div>
+    @endif
 @endsection
 
 

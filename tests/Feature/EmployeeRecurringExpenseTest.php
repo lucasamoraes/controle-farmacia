@@ -19,7 +19,9 @@ class EmployeeRecurringExpenseTest extends TestCase
             'company_id' => $company->id,
             'name' => 'Ana Caixa',
             'role' => 'Caixa',
-            'salary' => 2500,
+            'salary' => 2800,
+            'fixed_salary' => 2500,
+            'variable_salary' => 300,
             'payment_day' => 5,
             'is_active' => true,
         ]);
@@ -36,12 +38,22 @@ class EmployeeRecurringExpenseTest extends TestCase
 
         $this->assertDatabaseHas('payables', [
             'company_id' => $company->id,
-            'description' => 'Salario - Ana Caixa',
+            'description' => 'Salario fixo - Ana Caixa',
             'amount' => 2500,
             'due_date' => '2026-08-05 00:00:00',
             'status' => 'open',
-            'source' => 'employee_recurring',
-            'document_number' => 'FUNC-'.$employee->id.'-2026-08',
+            'source' => 'employee_fixed',
+            'document_number' => 'FUNC-FIXO-'.$employee->id.'-2026-08',
+        ]);
+
+        $this->assertDatabaseHas('payables', [
+            'company_id' => $company->id,
+            'description' => 'Salario variavel - Ana Caixa',
+            'amount' => 300,
+            'due_date' => '2026-08-05 00:00:00',
+            'status' => 'open',
+            'source' => 'employee_variable',
+            'document_number' => 'FUNC-VARIAVEL-'.$employee->id.'-2026-08',
         ]);
     }
 
@@ -52,6 +64,7 @@ class EmployeeRecurringExpenseTest extends TestCase
             'company_id' => $company->id,
             'name' => 'Bruno Balcao',
             'salary' => 1800,
+            'fixed_salary' => 1800,
             'payment_day' => 31,
             'is_active' => true,
         ]);
@@ -61,7 +74,7 @@ class EmployeeRecurringExpenseTest extends TestCase
 
         $this->assertDatabaseCount('payables', 1);
         $this->assertDatabaseHas('payables', [
-            'description' => 'Salario - Bruno Balcao',
+            'description' => 'Salario fixo - Bruno Balcao',
             'due_date' => '2026-02-28 00:00:00',
         ]);
     }

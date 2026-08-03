@@ -4,7 +4,7 @@
     <div class="actions" style="justify-content:space-between; align-items:flex-start;">
         <div>
             <h1 class="title">{{ $employee->exists ? 'Editar funcionario' : 'Novo funcionario' }}</h1>
-            <p class="subtitle">Informe o salario e o dia de pagamento para gerar despesas recorrentes.</p>
+            <p class="subtitle">Informe o salario fixo recorrente e o variavel previsto para o mes.</p>
         </div>
         <a class="btn secondary" href="{{ route('funcionarios.index') }}">Voltar</a>
     </div>
@@ -32,13 +32,23 @@
         </div>
 
         <div class="field-grid">
-            <label>Salario
-                <input type="number" step="0.01" min="0" name="salary" value="{{ old('salary', $employee->salary ?? 0) }}" required>
-                @error('salary') <span class="error">{{ $message }}</span> @enderror
+            <label>Salario fixo
+                <input type="number" step="0.01" min="0" name="fixed_salary" value="{{ old('fixed_salary', $employee->fixed_salary ?? $employee->salary ?? 0) }}" required>
+                @error('fixed_salary') <span class="error">{{ $message }}</span> @enderror
             </label>
+            <label>Salario variavel
+                <input type="number" step="0.01" min="0" name="variable_salary" value="{{ old('variable_salary', $employee->variable_salary ?? 0) }}">
+                @error('variable_salary') <span class="error">{{ $message }}</span> @enderror
+            </label>
+        </div>
+
+        <div class="field-grid">
             <label>Dia de pagamento
                 <input type="number" min="1" max="31" name="payment_day" value="{{ old('payment_day', $employee->payment_day ?? 5) }}" required>
                 @error('payment_day') <span class="error">{{ $message }}</span> @enderror
+            </label>
+            <label>Total previsto
+                <input value="R$ {{ number_format((float) old('fixed_salary', $employee->fixed_salary ?? $employee->salary ?? 0) + (float) old('variable_salary', $employee->variable_salary ?? 0), 2, ',', '.') }}" readonly>
             </label>
         </div>
 

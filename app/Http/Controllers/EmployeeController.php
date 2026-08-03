@@ -53,7 +53,9 @@ class EmployeeController extends Controller
             'month' => $month,
             'search' => $search,
             'statusFilter' => $status,
-            'activePayrollTotal' => $company->employees()->where('is_active', true)->sum('salary'),
+            'activeFixedPayrollTotal' => $company->employees()->where('is_active', true)->sum('fixed_salary'),
+            'activeVariablePayrollTotal' => $company->employees()->where('is_active', true)->sum('variable_salary'),
+            'activePayrollTotal' => $company->employees()->where('is_active', true)->sum('fixed_salary') + $company->employees()->where('is_active', true)->sum('variable_salary'),
             'monthExpenseTotal' => $monthExpenses->where('status', '!=', 'cancelled')->sum('amount'),
             'monthOpenTotal' => $monthExpenses->where('status', 'open')->sum('amount'),
             'monthPaidTotal' => $monthExpenses->where('status', 'paid')->sum('amount'),
@@ -64,7 +66,7 @@ class EmployeeController extends Controller
     {
         return view('employees.form', [
             'company' => $this->company(),
-            'employee' => new Employee(['payment_day' => 5, 'is_active' => true]),
+            'employee' => new Employee(['payment_day' => 5, 'is_active' => true, 'fixed_salary' => 0, 'variable_salary' => 0]),
         ]);
     }
 
@@ -142,14 +144,43 @@ class EmployeeController extends Controller
             ->get();
 
         foreach ($employees as $employee) {
-            $documentNumber = sprintf('FUNC-%d-%s', $employee->id, $monthStart->format('Y-m'));
+            $fixedDocument = sprintf('FUNC-FIXO-%d-%s', $employee->id, $monthStart->format('Y-m'));
+            $variableDocument = sprintf('FUNC-VARIAVEL-%d-%s', $employee->id, $monthStart->format('Y-m'));
 
-            $exists = $company->payables()
-                ->where('source', 'employee_recurring')
-                ->where('document_number', $documentNumber)
+            $fixedExists = $company->payables()
+                ->whereIn('source', ['employee_recurring', 'employee_fixed'])
+                ->whereIn('document_number', [$fixedDocument, sprintf('FUNC-%d-%s', $employee->id, $monthStart->format('Y-m'))])
                 ->exists();
 
-            if ($exists) {
+            if ($fixedExists) {
+                $skipped++;
+            } elseif ((float) $employee->fixed_salary > 0) {
+                $dueDay = min(max((int) $employee->payment_day, 1), (int) $monthEnd->format('d'));
+                $dueDate = $monthStart->copy()->day($dueDay);
+
+                $company->payables()->create([
+                    'financial_category_id' => $category->id,
+                    'description' => 'Salario fixo - '.$employee->name,
+                    'amount' => $employee->fixed_salary,
+                    'due_date' => $dueDate->toDateString(),
+                    'status' => 'open',
+                    'source' => 'employee_fixed',
+                    'document_number' => $fixedDocument,
+                    'notes' => trim((string) $employee->role) !== '' ? 'Cargo: '.$employee->role : null,
+                ]);
+                $created++;
+            }
+
+            if ((float) $employee->variable_salary <= 0) {
+                continue;
+            }
+
+            $variableExists = $company->payables()
+                ->where('source', 'employee_variable')
+                ->where('document_number', $variableDocument)
+                ->exists();
+
+            if ($variableExists) {
                 $skipped++;
                 continue;
             }
@@ -159,12 +190,12 @@ class EmployeeController extends Controller
 
             $company->payables()->create([
                 'financial_category_id' => $category->id,
-                'description' => 'Salario - '.$employee->name,
-                'amount' => $employee->salary,
+                'description' => 'Salario variavel - '.$employee->name,
+                'amount' => $employee->variable_salary,
                 'due_date' => $dueDate->toDateString(),
                 'status' => 'open',
-                'source' => 'employee_recurring',
-                'document_number' => $documentNumber,
+                'source' => 'employee_variable',
+                'document_number' => $variableDocument,
                 'notes' => trim((string) $employee->role) !== '' ? 'Cargo: '.$employee->role : null,
             ]);
             $created++;
@@ -181,7 +212,8 @@ class EmployeeController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'document' => ['nullable', 'string', 'max:20'],
             'role' => ['nullable', 'string', 'max:255'],
-            'salary' => ['required', 'numeric', 'min:0'],
+            'fixed_salary' => ['required', 'numeric', 'min:0'],
+            'variable_salary' => ['nullable', 'numeric', 'min:0'],
             'payment_day' => ['required', 'integer', 'min:1', 'max:31'],
             'starts_on' => ['nullable', 'date'],
             'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
@@ -189,6 +221,8 @@ class EmployeeController extends Controller
         ]);
 
         $data['document'] = $data['document'] ? preg_replace('/\D+/', '', $data['document']) : null;
+        $data['variable_salary'] = $data['variable_salary'] ?? 0;
+        $data['salary'] = (float) $data['fixed_salary'] + (float) $data['variable_salary'];
 
         return $data;
     }

@@ -13,6 +13,8 @@ class Employee extends Model
         'document',
         'role',
         'salary',
+        'fixed_salary',
+        'variable_salary',
         'payment_day',
         'starts_on',
         'ends_on',
@@ -22,6 +24,8 @@ class Employee extends Model
 
     protected $casts = [
         'salary' => 'decimal:2',
+        'fixed_salary' => 'decimal:2',
+        'variable_salary' => 'decimal:2',
         'payment_day' => 'integer',
         'starts_on' => 'date',
         'ends_on' => 'date',

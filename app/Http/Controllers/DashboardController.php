@@ -18,6 +18,9 @@ class DashboardController extends Controller
         $search = trim((string) $request->query('busca', ''));
         $status = $request->query('status', '');
         $period = $request->query('periodo', 'month');
+        $dashboardTab = in_array($request->query('aba'), ['financeiro', 'funcionarios', 'vendas'], true)
+            ? $request->query('aba')
+            : 'financeiro';
         [$dateStart, $dateEnd] = $this->dateRange($request);
 
         if (($dateStart || $dateEnd) && ($request->query('periodo') === null || $period === 'custom')) {
@@ -71,6 +74,7 @@ class DashboardController extends Controller
             'period' => $period,
             'dateStart' => $dateStart,
             'dateEnd' => $dateEnd,
+            'dashboardTab' => $dashboardTab,
             'totalFiltered' => $totalFiltered,
             'openTotal' => $openTotal,
             'overdueTotal' => $overdueTotal,
@@ -83,6 +87,7 @@ class DashboardController extends Controller
             'weekdayAverageChart' => $this->weekdayAverageChart($company, $dateStart, $dateEnd),
             'channelRevenueChart' => $this->channelRevenueChart($company),
             'monthlyExpenseChart' => $this->monthlyExpenseChart($company),
+            'employeeDashboard' => $this->employeeDashboard($company, $dateStart, $dateEnd),
             'financialAlerts' => $alerts->dashboardAlerts($company),
             'suppliersCount' => $company->suppliers()->count(),
         ]);
@@ -215,6 +220,55 @@ class DashboardController extends Controller
             'label' => Carbon::createFromFormat('Y-m-d', $month . '-01')->format('m/Y'),
             'value' => (float) $rows->sum('amount'),
         ])->values()->all();
+    }
+
+    private function employeeDashboard(Company $company, ?string $dateStart, ?string $dateEnd): array
+    {
+        $category = $company->categories()
+            ->where('name', 'Funcionarios')
+            ->where('type', 'expense')
+            ->first();
+
+        $activeEmployees = $company->employees()->where('is_active', true)->get();
+        $payables = $category
+            ? $company->payables()
+                ->where('financial_category_id', $category->id)
+                ->when($dateStart, fn ($query) => $query->whereDate('due_date', '>=', $dateStart))
+                ->when($dateEnd, fn ($query) => $query->whereDate('due_date', '<=', $dateEnd))
+                ->get()
+            : collect();
+
+        $monthly = $payables
+            ->where('status', '!=', 'cancelled')
+            ->groupBy(fn ($payable) => $payable->due_date->format('Y-m'))
+            ->map(function ($rows, $month) {
+                return [
+                    'label' => Carbon::createFromFormat('Y-m-d', $month.'-01')->format('m/Y'),
+                    'fixed' => (float) $rows->whereIn('source', ['employee_fixed', 'employee_recurring'])->sum('amount'),
+                    'variable' => (float) $rows->where('source', 'employee_variable')->sum('amount'),
+                    'total' => (float) $rows->sum('amount'),
+                ];
+            })
+            ->sortBy('label')
+            ->values();
+
+        return [
+            'activeCount' => $activeEmployees->count(),
+            'inactiveCount' => $company->employees()->where('is_active', false)->count(),
+            'fixedTotal' => (float) $activeEmployees->sum('fixed_salary'),
+            'variableTotal' => (float) $activeEmployees->sum('variable_salary'),
+            'openTotal' => (float) $payables->where('status', 'open')->sum('amount'),
+            'paidTotal' => (float) $payables->where('status', 'paid')->sum('amount'),
+            'monthly' => $monthly->all(),
+            'topEmployees' => $payables
+                ->where('status', '!=', 'cancelled')
+                ->groupBy(fn ($payable) => preg_replace('/^Salario (fixo|variavel) - /', '', $payable->description))
+                ->map(fn ($rows, $name) => ['name' => $name, 'total' => (float) $rows->sum('amount')])
+                ->sortByDesc('total')
+                ->take(5)
+                ->values()
+                ->all(),
+        ];
     }
 
     private function weekdayKey(string $weekday): string
