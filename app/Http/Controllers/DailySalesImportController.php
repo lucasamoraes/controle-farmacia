@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Services\DailySalesSpreadsheetImporter;
+use Illuminate\Support\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +19,7 @@ class DailySalesImportController extends Controller
     {
         return view('imports.daily-sales', [
             'company' => $this->company(),
+            'recentSales' => $this->company()->dailySales()->orderByDesc('sale_date')->limit(12)->get(),
         ]);
     }
 
@@ -30,8 +32,50 @@ class DailySalesImportController extends Controller
 
         $path = $data['spreadsheet']->store('imports');
         $stats = $importer->import($company, storage_path('app/private/' . $path));
+        foreach ($stats['months'] ?? [] as $month) {
+            $this->syncMonthlyRevenue($company, $month);
+        }
 
         return redirect()->route('imports.vendas-diarias.create')->with('import_result', $stats);
+    }
+
+    public function storeManual(Request $request): RedirectResponse
+    {
+        $company = $this->company();
+        $data = $request->validate([
+            'sale_date' => ['required', 'date'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'weekday' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $saleDate = Carbon::parse($data['sale_date'])->toDateString();
+        $weekday = trim((string) ($data['weekday'] ?? ''));
+        $weekday = $weekday !== ''
+            ? $weekday
+            : Carbon::parse($saleDate)->locale('pt_BR')->translatedFormat('l');
+
+        $sale = $company->dailySales()->whereDate('sale_date', $saleDate)->first();
+
+        if ($sale) {
+            $sale->update([
+                'amount' => round((float) $data['amount'], 2),
+                'weekday' => mb_substr($weekday, 0, 255),
+            ]);
+        } else {
+            $sale = $company->dailySales()->create([
+                'sale_date' => $saleDate,
+                'amount' => round((float) $data['amount'], 2),
+                'weekday' => mb_substr($weekday, 0, 255),
+            ]);
+        }
+
+        $this->syncMonthlyRevenue($company, Carbon::parse($saleDate)->format('Y-m'));
+
+        $message = $sale->wasRecentlyCreated
+            ? 'Venda diaria cadastrada e faturamento mensal atualizado.'
+            : 'Essa data ja existia. Valor atualizado e faturamento mensal recalculado.';
+
+        return redirect()->route('imports.vendas-diarias.create')->with('status', $message);
     }
 
     public function template(): StreamedResponse
@@ -56,5 +100,33 @@ class DailySalesImportController extends Controller
     private function company(): Company
     {
         return Auth::user()->companies()->firstOrFail();
+    }
+
+    private function syncMonthlyRevenue(Company $company, string $month): void
+    {
+        if (! preg_match('/^\d{4}-\d{2}$/', $month)) {
+            return;
+        }
+
+        $monthStart = Carbon::createFromFormat('Y-m-d', $month.'-01')->startOfMonth();
+        $monthEnd = $monthStart->copy()->endOfMonth();
+        $grossRevenue = (float) $company->dailySales()
+            ->whereBetween('sale_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->sum('amount');
+
+        $revenue = $company->monthlyRevenues()
+            ->whereDate('reference_month', $monthStart->toDateString())
+            ->first();
+
+        if (! $revenue) {
+            $revenue = $company->monthlyRevenues()->make([
+                'reference_month' => $monthStart->toDateString(),
+            ]);
+        }
+
+        $revenue->gross_revenue = $grossRevenue;
+        $salesCount = (int) ($revenue->sales_count ?? 0);
+        $revenue->average_ticket = $salesCount > 0 ? round($grossRevenue / $salesCount, 2) : 0;
+        $revenue->save();
     }
 }

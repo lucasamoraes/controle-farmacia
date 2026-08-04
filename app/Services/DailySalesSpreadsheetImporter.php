@@ -15,7 +15,7 @@ class DailySalesSpreadsheetImporter
         $spreadsheet = IOFactory::load($path);
         $sheet = $spreadsheet->getSheetByName('VENDAS') ?? $spreadsheet->getActiveSheet();
         $columns = $this->columns($sheet);
-        $stats = ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => []];
+        $stats = ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => [], 'months' => []];
 
         foreach ($sheet->getRowIterator(2) as $row) {
             $rowIndex = $row->getRowIndex();
@@ -34,13 +34,23 @@ class DailySalesSpreadsheetImporter
             }
 
             $weekday = $weekday ?: Carbon::parse($saleDate)->locale('pt_BR')->translatedFormat('l');
-            $sale = $company->dailySales()->updateOrCreate(
-                ['sale_date' => $saleDate],
-                ['weekday' => mb_substr($weekday, 0, 255), 'amount' => $amount]
-            );
+            $sale = $company->dailySales()->whereDate('sale_date', $saleDate)->first();
 
-            $sale->wasRecentlyCreated ? $stats['created']++ : $stats['updated']++;
+            if ($sale) {
+                $sale->update(['weekday' => mb_substr($weekday, 0, 255), 'amount' => $amount]);
+                $stats['updated']++;
+            } else {
+                $company->dailySales()->create([
+                    'sale_date' => $saleDate,
+                    'weekday' => mb_substr($weekday, 0, 255),
+                    'amount' => $amount,
+                ]);
+                $stats['created']++;
+            }
+            $stats['months'][Carbon::parse($saleDate)->format('Y-m')] = Carbon::parse($saleDate)->format('Y-m');
         }
+
+        $stats['months'] = array_values($stats['months']);
 
         return $stats;
     }

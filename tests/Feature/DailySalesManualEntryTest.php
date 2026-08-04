@@ -1,0 +1,92 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Company;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class DailySalesManualEntryTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_finance_user_can_register_daily_sale_and_sync_monthly_revenue(): void
+    {
+        [$company, $finance] = $this->companyWithUser('finance');
+
+        $this->actingAs($finance)
+            ->post('/importar/vendas-diarias/manual', [
+                'sale_date' => '2026-08-04',
+                'amount' => 1500.75,
+            ])
+            ->assertRedirect('/importar/vendas-diarias');
+
+        $this->assertDatabaseHas('daily_sales', [
+            'company_id' => $company->id,
+            'sale_date' => '2026-08-04 00:00:00',
+            'amount' => 1500.75,
+        ]);
+
+        $this->assertDatabaseHas('monthly_revenues', [
+            'company_id' => $company->id,
+            'reference_month' => '2026-08-01 00:00:00',
+            'gross_revenue' => 1500.75,
+        ]);
+    }
+
+    public function test_registering_same_daily_sale_date_updates_value_and_recalculates_month(): void
+    {
+        [$company, $owner] = $this->companyWithUser('owner');
+
+        $this->actingAs($owner)->post('/importar/vendas-diarias/manual', [
+            'sale_date' => '2026-08-04',
+            'amount' => 1000,
+        ]);
+        $this->actingAs($owner)->post('/importar/vendas-diarias/manual', [
+            'sale_date' => '2026-08-05',
+            'amount' => 500,
+        ]);
+        $this->actingAs($owner)->post('/importar/vendas-diarias/manual', [
+            'sale_date' => '2026-08-04',
+            'amount' => 1200,
+        ]);
+
+        $this->assertDatabaseCount('daily_sales', 2);
+        $this->assertDatabaseHas('daily_sales', [
+            'company_id' => $company->id,
+            'sale_date' => '2026-08-04 00:00:00',
+            'amount' => 1200,
+        ]);
+        $this->assertDatabaseHas('monthly_revenues', [
+            'company_id' => $company->id,
+            'reference_month' => '2026-08-01 00:00:00',
+            'gross_revenue' => 1700,
+        ]);
+    }
+
+    public function test_viewer_cannot_register_daily_sale(): void
+    {
+        [, $viewer] = $this->companyWithUser('viewer');
+
+        $this->actingAs($viewer)
+            ->post('/importar/vendas-diarias/manual', [
+                'sale_date' => '2026-08-04',
+                'amount' => 100,
+            ])
+            ->assertForbidden();
+    }
+
+    private function companyWithUser(string $role): array
+    {
+        $company = Company::create([
+            'name' => 'Farmacia Teste',
+            'trade_name' => 'Farmacia Teste',
+        ]);
+        $user = User::factory()->create();
+
+        $company->users()->attach($user->id, ['role' => $role]);
+
+        return [$company, $user];
+    }
+}

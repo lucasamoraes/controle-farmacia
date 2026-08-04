@@ -51,6 +51,7 @@ Route::middleware('auth')->group(function () {
         Route::get('importar/vendas-diarias', [DailySalesImportController::class, 'create'])->name('imports.vendas-diarias.create');
         Route::get('importar/vendas-diarias/modelo', [DailySalesImportController::class, 'template'])->name('imports.vendas-diarias.template');
         Route::post('importar/vendas-diarias', [DailySalesImportController::class, 'store'])->name('imports.vendas-diarias.store');
+        Route::post('importar/vendas-diarias/manual', [DailySalesImportController::class, 'storeManual'])->name('imports.vendas-diarias.manual');
     });
 
     Route::get('fornecedores', [SupplierController::class, 'index'])->name('fornecedores.index');
