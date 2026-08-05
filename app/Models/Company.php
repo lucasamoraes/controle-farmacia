@@ -56,6 +56,11 @@ class Company extends Model
         return $this->hasMany(Employee::class);
     }
 
+    public function creditCardInvoices(): HasMany
+    {
+        return $this->hasMany(CreditCardInvoice::class);
+    }
+
     public function boletoUploads(): HasMany
     {
         return $this->hasMany(BoletoUpload::class);

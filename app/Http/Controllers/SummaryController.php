@@ -73,6 +73,7 @@ class SummaryController extends Controller
             ->leftJoin('financial_categories', 'financial_categories.id', '=', 'payables.financial_category_id')
             ->whereBetween('payables.due_date', [$start, $end])
             ->where('payables.status', '!=', 'cancelled')
+            ->where('payables.source', '!=', 'credit_card_invoice')
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($inner) use ($search) {
                     $inner->where('financial_categories.name', 'like', "%{$search}%")
@@ -80,10 +81,36 @@ class SummaryController extends Controller
                 });
             })
             ->groupBy('financial_categories.id', 'financial_categories.name')
-            ->orderByDesc(DB::raw('SUM(payables.amount)'))
             ->get([
                 DB::raw("COALESCE(financial_categories.name, 'Sem categoria') as name"),
                 DB::raw('SUM(payables.amount) as total'),
+            ])
+            ->concat($this->cardItemCategoryTotals($company, $start, $end, $search))
+            ->groupBy('name')
+            ->map(fn ($rows, $name) => (object) ['name' => $name, 'total' => (float) $rows->sum('total')])
+            ->sortByDesc('total')
+            ->values();
+    }
+
+    private function cardItemCategoryTotals(Company $company, Carbon $start, Carbon $end, string $search = '')
+    {
+        return DB::table('credit_card_invoice_items')
+            ->join('credit_card_invoices', 'credit_card_invoices.id', '=', 'credit_card_invoice_items.credit_card_invoice_id')
+            ->leftJoin('financial_categories', 'financial_categories.id', '=', 'credit_card_invoice_items.financial_category_id')
+            ->where('credit_card_invoices.company_id', $company->id)
+            ->whereBetween('credit_card_invoices.due_date', [$start, $end])
+            ->where('credit_card_invoices.status', '!=', 'cancelled')
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($inner) use ($search) {
+                    $inner->where('financial_categories.name', 'like', "%{$search}%")
+                        ->orWhere('credit_card_invoice_items.description', 'like', "%{$search}%")
+                        ->orWhere('credit_card_invoices.card_name', 'like', "%{$search}%");
+                });
+            })
+            ->groupBy('financial_categories.id', 'financial_categories.name')
+            ->get([
+                DB::raw("COALESCE(financial_categories.name, 'Sem categoria') as name"),
+                DB::raw('SUM(credit_card_invoice_items.amount) as total'),
             ]);
     }
 

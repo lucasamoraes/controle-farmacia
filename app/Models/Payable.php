@@ -50,4 +50,9 @@ class Payable extends Model
     {
         return $this->hasOne(BoletoUpload::class);
     }
+
+    public function creditCardInvoice(): HasOne
+    {
+        return $this->hasOne(CreditCardInvoice::class);
+    }
 }

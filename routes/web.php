@@ -3,9 +3,11 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BoletoUploadController;
 use App\Http\Controllers\CompanyUserController;
+use App\Http\Controllers\CreditCardInvoiceController;
 use App\Http\Controllers\DailySalesImportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\FinancialCategoryController;
 use App\Http\Controllers\MonthlyRevenueController;
 use App\Http\Controllers\PayableController;
 use App\Http\Controllers\ProductionInstallController;
@@ -78,6 +80,16 @@ Route::middleware('auth')->group(function () {
         Route::patch('funcionarios/{funcionario}/reativar', [EmployeeController::class, 'restore'])->name('funcionarios.restore');
     });
 
+    Route::get('faturas-cartao', [CreditCardInvoiceController::class, 'index'])->name('faturas-cartao.index');
+    Route::middleware('company.role:owner,finance')->group(function () {
+        Route::get('faturas-cartao/create', [CreditCardInvoiceController::class, 'create'])->name('faturas-cartao.create');
+        Route::post('faturas-cartao', [CreditCardInvoiceController::class, 'store'])->name('faturas-cartao.store');
+        Route::get('faturas-cartao/{faturas_cartao}/edit', [CreditCardInvoiceController::class, 'edit'])->name('faturas-cartao.edit');
+        Route::put('faturas-cartao/{faturas_cartao}', [CreditCardInvoiceController::class, 'update'])->name('faturas-cartao.update');
+        Route::delete('faturas-cartao/{faturas_cartao}', [CreditCardInvoiceController::class, 'destroy'])->name('faturas-cartao.destroy');
+        Route::patch('faturas-cartao/{faturas_cartao}/marcar-paga', [CreditCardInvoiceController::class, 'markAsPaid'])->name('faturas-cartao.mark-paid');
+    });
+
     Route::middleware('company.role:owner,finance')->group(function () {
         Route::get('boletos/novo', [BoletoUploadController::class, 'create'])->name('boletos.create');
         Route::post('boletos', [BoletoUploadController::class, 'store'])->name('boletos.store');
@@ -97,6 +109,13 @@ Route::middleware('auth')->group(function () {
         Route::delete('contas-a-pagar/{contas_a_pagar}', [PayableController::class, 'destroy'])->name('contas-a-pagar.destroy');
         Route::patch('contas-a-pagar/{contas_a_pagar}/marcar-paga', [PayableController::class, 'markAsPaid'])->name('payables.mark-paid');
         Route::delete('contas-a-pagar/{contas_a_pagar}/excluir', [PayableController::class, 'delete'])->name('payables.delete');
+    });
+
+    Route::get('configuracoes/categorias', [FinancialCategoryController::class, 'index'])->name('configuracoes.categorias.index');
+    Route::middleware('company.role:owner,finance')->group(function () {
+        Route::post('configuracoes/categorias', [FinancialCategoryController::class, 'store'])->name('configuracoes.categorias.store');
+        Route::put('configuracoes/categorias/{categoria}', [FinancialCategoryController::class, 'update'])->name('configuracoes.categorias.update');
+        Route::delete('configuracoes/categorias/{categoria}', [FinancialCategoryController::class, 'destroy'])->name('configuracoes.categorias.destroy');
     });
 });
 

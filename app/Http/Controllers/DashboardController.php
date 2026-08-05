@@ -48,6 +48,7 @@ class DashboardController extends Controller
         $topSuppliers = (clone $filtered)
             ->leftJoin('suppliers', 'suppliers.id', '=', 'payables.supplier_id')
             ->where('payables.status', '!=', 'cancelled')
+            ->where('payables.source', '!=', 'credit_card_invoice')
             ->groupBy('suppliers.id', 'suppliers.name')
             ->orderByDesc(DB::raw('SUM(payables.amount)'))
             ->limit(5)
@@ -56,16 +57,7 @@ class DashboardController extends Controller
                 DB::raw('SUM(payables.amount) as total'),
             ]);
 
-        $categoryTotals = (clone $filtered)
-            ->leftJoin('financial_categories', 'financial_categories.id', '=', 'payables.financial_category_id')
-            ->where('payables.status', '!=', 'cancelled')
-            ->groupBy('financial_categories.id', 'financial_categories.name')
-            ->orderByDesc(DB::raw('SUM(payables.amount)'))
-            ->limit(5)
-            ->get([
-                DB::raw("COALESCE(financial_categories.name, 'Sem categoria') as name"),
-                DB::raw('SUM(payables.amount) as total'),
-            ]);
+        $categoryTotals = $this->categoryTotals($company, $search, $status, $dateStart, $dateEnd)->take(5);
 
         return view('dashboard.index', [
             'company' => $company,
@@ -221,6 +213,53 @@ class DashboardController extends Controller
             'label' => Carbon::createFromFormat('Y-m-d', $month . '-01')->format('m/Y'),
             'value' => (float) $rows->sum('amount'),
         ])->values()->all();
+    }
+
+    private function categoryTotals(Company $company, string $search, string $status, ?string $dateStart, ?string $dateEnd)
+    {
+        $payableRows = $this->filteredPayables($company, $search, $status, $dateStart, $dateEnd)
+            ->leftJoin('financial_categories', 'financial_categories.id', '=', 'payables.financial_category_id')
+            ->where('payables.status', '!=', 'cancelled')
+            ->where('payables.source', '!=', 'credit_card_invoice')
+            ->groupBy('financial_categories.id', 'financial_categories.name')
+            ->get([
+                DB::raw("COALESCE(financial_categories.name, 'Sem categoria') as name"),
+                DB::raw('SUM(payables.amount) as total'),
+            ]);
+
+        $cardRows = DB::table('credit_card_invoice_items')
+            ->join('credit_card_invoices', 'credit_card_invoices.id', '=', 'credit_card_invoice_items.credit_card_invoice_id')
+            ->leftJoin('financial_categories', 'financial_categories.id', '=', 'credit_card_invoice_items.financial_category_id')
+            ->where('credit_card_invoices.company_id', $company->id)
+            ->when($dateStart, fn ($query) => $query->whereDate('credit_card_invoices.due_date', '>=', $dateStart))
+            ->when($dateEnd, fn ($query) => $query->whereDate('credit_card_invoices.due_date', '<=', $dateEnd))
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($inner) use ($search) {
+                    $inner->where('credit_card_invoices.card_name', 'like', "%{$search}%")
+                        ->orWhere('credit_card_invoice_items.description', 'like', "%{$search}%")
+                        ->orWhere('financial_categories.name', 'like', "%{$search}%");
+                });
+            })
+            ->when(in_array($status, ['open', 'paid', 'cancelled', 'overdue'], true), function ($query) use ($status) {
+                if ($status === 'overdue') {
+                    $query->where('credit_card_invoices.status', 'open')->whereDate('credit_card_invoices.due_date', '<', Carbon::today());
+                    return;
+                }
+
+                $query->where('credit_card_invoices.status', $status);
+            }, fn ($query) => $query->where('credit_card_invoices.status', '!=', 'cancelled'))
+            ->groupBy('financial_categories.id', 'financial_categories.name')
+            ->get([
+                DB::raw("COALESCE(financial_categories.name, 'Sem categoria') as name"),
+                DB::raw('SUM(credit_card_invoice_items.amount) as total'),
+            ]);
+
+        return $payableRows
+            ->concat($cardRows)
+            ->groupBy('name')
+            ->map(fn ($rows, $name) => (object) ['name' => $name, 'total' => (float) $rows->sum('total')])
+            ->sortByDesc('total')
+            ->values();
     }
 
     private function employeeDashboard(Company $company, ?string $dateStart, ?string $dateEnd): array
