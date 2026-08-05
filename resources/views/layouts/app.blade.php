@@ -21,8 +21,16 @@
         .sidebar { background:var(--sidebar); color:#eef6ff; padding:22px 18px; display:flex; flex-direction:column; gap:22px; min-height:100vh; position:sticky; top:0; }
         .brand { font-size:18px; font-weight:700; line-height:1.2; }
         .brand span { display:block; color:#a8c5da; font-size:12px; font-weight:400; margin-top:4px; }
-        .nav { display:grid; gap:6px; }
-        .nav a { padding:10px 12px; border-radius:6px; color:#d9e7f2; }
+        .nav { display:grid; gap:8px; }
+        .nav-group { border:1px solid rgba(216,231,242,.12); border-radius:8px; overflow:hidden; }
+        .nav-group summary { list-style:none; cursor:pointer; padding:11px 12px; color:#eef6ff; font-weight:800; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+        .nav-group summary::-webkit-details-marker { display:none; }
+        .nav-group summary::after { content:'+'; color:#a8c5da; font-weight:800; }
+        .nav-group[open] summary { background:#173b56; }
+        .nav-group[open] summary::after { content:'-'; }
+        .nav-items { display:grid; gap:4px; padding:6px; background:rgba(5,20,35,.18); }
+        .nav-subtitle { padding:7px 10px 3px; color:#a8c5da; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+        .nav a { padding:9px 10px; border-radius:6px; color:#d9e7f2; font-size:13px; }
         .nav a:hover, .nav a.active { background:#1d4966; color:#fff; }
         .sidebar-footer { margin-top:auto; color:#bdd0df; font-size:12px; }
         .main { min-width:0; max-width:100%; overflow:hidden; }
@@ -139,23 +147,57 @@
             <button class="mobile-backdrop" type="button" data-close-menu aria-label="Fechar menu"></button>
             <aside class="sidebar" id="app-sidebar">
                 <div class="brand">Controle Farmacia<span>{{ $company->trade_name ?? $company->name ?? 'Financeiro' }}</span></div>
+                @php
+                    $reportsOpen = request()->routeIs('dashboard') || request()->routeIs('resumo.*');
+                    $revenueOpen = request()->routeIs('faturamento-mensal.*') || request()->routeIs('imports.vendas-diarias.*');
+                    $payablesOpen = request()->routeIs('contas-a-pagar.*') || request()->routeIs('boletos.*') || request()->routeIs('fornecedores.*') || request()->routeIs('funcionarios.*') || request()->routeIs('faturas-cartao.*');
+                    $settingsOpen = request()->routeIs('configuracoes.*') || request()->routeIs('imports.boletos.*') || request()->routeIs('usuarios.*');
+                @endphp
                 <nav class="nav">
-                    <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">Dashboard</a>
-                    <a href="{{ route('resumo.index') }}" class="{{ request()->routeIs('resumo.*') ? 'active' : '' }}">Resumo</a>
-                    <a href="{{ route('faturamento-mensal.index') }}" class="{{ request()->routeIs('faturamento-mensal.*') ? 'active' : '' }}">Faturamento</a>
-                    <a href="{{ route('fornecedores.index') }}" class="{{ request()->routeIs('fornecedores.*') ? 'active' : '' }}">Fornecedores</a>
-                    <a href="{{ route('funcionarios.index') }}" class="{{ request()->routeIs('funcionarios.*') ? 'active' : '' }}">Funcionarios</a>
-                    <a href="{{ route('faturas-cartao.index') }}" class="{{ request()->routeIs('faturas-cartao.*') ? 'active' : '' }}">Faturas cartao</a>
-                    <a href="{{ route('contas-a-pagar.index') }}" class="{{ request()->routeIs('contas-a-pagar.*') ? 'active' : '' }}">Contas a pagar</a>
-                    @if (auth()->user()->canWriteFinance($company))
-                        <a href="{{ route('boletos.create') }}" class="{{ request()->routeIs('boletos.*') ? 'active' : '' }}">Boletos PDF</a>
-                        <a href="{{ route('imports.boletos.create') }}" class="{{ request()->routeIs('imports.boletos.*') ? 'active' : '' }}">Importar</a>
-                        <a href="{{ route('imports.vendas-diarias.create') }}" class="{{ request()->routeIs('imports.vendas-diarias.*') ? 'active' : '' }}">Vendas diarias</a>
-                    @endif
-                    @if (auth()->user()->canManageUsers($company))
-                        <a href="{{ route('usuarios.index') }}" class="{{ request()->routeIs('usuarios.*') ? 'active' : '' }}">Usuarios</a>
-                    @endif
-                    <a href="{{ route('configuracoes.categorias.index') }}" class="{{ request()->routeIs('configuracoes.*') ? 'active' : '' }}">Configuracoes</a>
+                    <details class="nav-group" {{ $reportsOpen ? 'open' : '' }}>
+                        <summary>Relatorios</summary>
+                        <div class="nav-items">
+                            <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">Dashboard</a>
+                            <a href="{{ route('resumo.index') }}" class="{{ request()->routeIs('resumo.*') ? 'active' : '' }}">Resumo</a>
+                        </div>
+                    </details>
+
+                    <details class="nav-group" {{ $revenueOpen ? 'open' : '' }}>
+                        <summary>Faturamento</summary>
+                        <div class="nav-items">
+                            <a href="{{ route('faturamento-mensal.index') }}" class="{{ request()->routeIs('faturamento-mensal.*') ? 'active' : '' }}">Faturamento mensal</a>
+                            @if (auth()->user()->canWriteFinance($company))
+                                <a href="{{ route('imports.vendas-diarias.create') }}" class="{{ request()->routeIs('imports.vendas-diarias.*') ? 'active' : '' }}">Vendas diarias</a>
+                            @endif
+                        </div>
+                    </details>
+
+                    <details class="nav-group" {{ $payablesOpen ? 'open' : '' }}>
+                        <summary>Contas a pagar</summary>
+                        <div class="nav-items">
+                            <a href="{{ route('contas-a-pagar.index') }}" class="{{ request()->routeIs('contas-a-pagar.*') ? 'active' : '' }}">Contas</a>
+                            @if (auth()->user()->canWriteFinance($company))
+                                <a href="{{ route('boletos.create') }}" class="{{ request()->routeIs('boletos.*') ? 'active' : '' }}">Boletos PDF</a>
+                            @endif
+                            <a href="{{ route('fornecedores.index') }}" class="{{ request()->routeIs('fornecedores.*') ? 'active' : '' }}">Fornecedores</a>
+                            <a href="{{ route('funcionarios.index') }}" class="{{ request()->routeIs('funcionarios.*') ? 'active' : '' }}">Funcionarios</a>
+                            <a href="{{ route('faturas-cartao.index') }}" class="{{ request()->routeIs('faturas-cartao.*') ? 'active' : '' }}">Faturas cartao</a>
+                        </div>
+                    </details>
+
+                    <details class="nav-group" {{ $settingsOpen ? 'open' : '' }}>
+                        <summary>Configuracao</summary>
+                        <div class="nav-items">
+                            <div class="nav-subtitle">Cadastros</div>
+                            <a href="{{ route('configuracoes.categorias.index') }}" class="{{ request()->routeIs('configuracoes.categorias.*') ? 'active' : '' }}">Categorias</a>
+                            @if (auth()->user()->canWriteFinance($company))
+                                <a href="{{ route('imports.boletos.create') }}" class="{{ request()->routeIs('imports.boletos.*') ? 'active' : '' }}">Importador</a>
+                            @endif
+                            @if (auth()->user()->canManageUsers($company))
+                                <a href="{{ route('usuarios.index') }}" class="{{ request()->routeIs('usuarios.*') ? 'active' : '' }}">Usuarios</a>
+                            @endif
+                        </div>
+                    </details>
                 </nav>
                 <div class="sidebar-footer">{{ auth()->user()->name }}<br>{{ ['owner' => 'Dono', 'finance' => 'Financeiro', 'viewer' => 'Consulta'][auth()->user()->roleForCompany($company)] ?? 'Usuario' }}</div>
             </aside>
