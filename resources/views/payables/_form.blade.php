@@ -34,12 +34,19 @@
 </div>
 <div class="field-grid">
     <label>Fornecedor
-        <select name="supplier_id">
+        <div style="display:grid; gap:8px;">
+            <div style="display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:8px;">
+                <input type="search" data-supplier-search placeholder="Digite para filtrar fornecedor" autocomplete="off">
+                <button class="btn secondary" type="button" data-supplier-search-button style="min-width:58px;">Lupa</button>
+            </div>
+            <select name="supplier_id" data-supplier-select>
             <option value="">Sem fornecedor</option>
             @foreach ($suppliers as $supplier)
-                <option value="{{ $supplier->id }}" @selected((string) old('supplier_id', $payable->supplier_id ?? '') === (string) $supplier->id)>{{ $supplier->name }}</option>
+                <option value="{{ $supplier->id }}" data-search="{{ mb_strtolower(($supplier->name ?? '') . ' ' . ($supplier->trade_name ?? '') . ' ' . ($supplier->document ?? '')) }}" @selected((string) old('supplier_id', $payable->supplier_id ?? '') === (string) $supplier->id)>{{ $supplier->name }}</option>
             @endforeach
-        </select>
+            </select>
+            <span class="subtitle" data-supplier-search-count style="font-size:12px;"></span>
+        </div>
         @error('supplier_id') <span class="error">{{ $message }}</span> @enderror
     </label>
     <label>Categoria
@@ -74,3 +81,52 @@
     <a class="btn secondary" href="{{ route('contas-a-pagar.index') }}">Cancelar</a>
 </div>
 
+<script>
+    (() => {
+        const input = document.querySelector('[data-supplier-search]');
+        const select = document.querySelector('[data-supplier-select]');
+        const count = document.querySelector('[data-supplier-search-count]');
+        const button = document.querySelector('[data-supplier-search-button]');
+        if (!input || !select) return;
+
+        const normalize = (value) => String(value || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+
+        const filter = () => {
+            const term = normalize(input.value);
+            let visible = 0;
+
+            [...select.options].forEach((option) => {
+                if (!option.value) {
+                    option.hidden = false;
+                    return;
+                }
+
+                const haystack = normalize(option.dataset.search || option.textContent);
+                const match = term === '' || haystack.includes(term);
+                option.hidden = !match;
+                if (match) visible++;
+            });
+
+            const selected = select.options[select.selectedIndex];
+            if (selected && selected.hidden) {
+                select.value = '';
+            }
+
+            if (count) {
+                count.textContent = term === ''
+                    ? `${visible} fornecedor(es) disponivel(is)`
+                    : `${visible} resultado(s) encontrado(s)`;
+            }
+        };
+
+        input.addEventListener('input', filter);
+        button?.addEventListener('click', () => {
+            input.focus();
+            filter();
+        });
+        filter();
+    })();
+</script>
