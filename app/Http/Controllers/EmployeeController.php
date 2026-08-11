@@ -53,6 +53,10 @@ class EmployeeController extends Controller
             ->get();
 
         $monthNetPayrollTotal = $this->monthlyPayrollAmount($company, $monthStart, $calculator);
+        $employeeNetAmounts = $employees->getCollection()
+            ->mapWithKeys(fn (Employee $employee) => [
+                $employee->id => $this->employeeMonthlyNetAmount($employee, $monthStart, $calculator),
+            ]);
 
         return view('employees.index', [
             'company' => $company,
@@ -63,6 +67,7 @@ class EmployeeController extends Controller
             'statusFilter' => $status,
             'activeFixedPayrollTotal' => $company->employees()->where('is_active', true)->sum('base_salary'),
             'monthNetPayrollTotal' => $monthNetPayrollTotal,
+            'employeeNetAmounts' => $employeeNetAmounts,
             'activePayrollTotal' => $company->employees()->where('is_active', true)->sum('base_salary'),
             'monthExpenseTotal' => $monthExpenses->where('status', '!=', 'cancelled')->sum('amount'),
             'monthOpenTotal' => $monthExpenses->where('status', 'open')->sum('amount'),
@@ -587,6 +592,22 @@ class EmployeeController extends Controller
             ->sum(DB::raw('earning - deduction'));
         $advanceTotal = (float) EmployeeAdvance::query()
             ->whereIn('employee_id', $employeeIds)
+            ->whereDate('deduct_month', $month->toDateString())
+            ->sum('amount');
+
+        return max(0, $automaticTotal + $eventTotal - $advanceTotal);
+    }
+
+    private function employeeMonthlyNetAmount(Employee $employee, Carbon $month, PayrollCalculator $calculator): float
+    {
+        $month = $month->copy()->startOfMonth();
+        $automaticTotal = collect($this->automaticPayrollItems($employee, $calculator))
+            ->sum(fn ($item) => (float) $item->earning - (float) $item->deduction);
+        $eventTotal = (float) $employee->payrollItems()
+            ->whereDate('reference_month', $month->toDateString())
+            ->where('paid_outside', false)
+            ->sum(DB::raw('earning - deduction'));
+        $advanceTotal = (float) $employee->advances()
             ->whereDate('deduct_month', $month->toDateString())
             ->sum('amount');
 

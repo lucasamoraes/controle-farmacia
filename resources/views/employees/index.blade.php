@@ -71,7 +71,7 @@
             <h2 class="panel-title">Equipe</h2>
             <div class="table-wrap"><table>
                 <thead>
-                    <tr><th>Nome</th><th>Cargo</th><th>Admissao</th><th>Salario base</th><th>Pagamento</th><th>Status</th><th></th></tr>
+                    <tr><th>Nome</th><th>Cargo</th><th>Admissao</th><th>Valor liquido</th><th>Pagamento</th><th>Status</th><th></th></tr>
                 </thead>
                 <tbody>
                 @forelse ($employees as $employee)
@@ -89,7 +89,7 @@
                             @endif
                         </td>
                         <td>{{ optional($employee->starts_on)->format('d/m/Y') ?? '-' }}</td>
-                        <td>R$ {{ number_format($employee->base_salary, 2, ',', '.') }}</td>
+                        <td><strong>R$ {{ number_format($employeeNetAmounts[$employee->id] ?? 0, 2, ',', '.') }}</strong></td>
                         <td>Dia {{ $employee->payment_day }}</td>
                         <td><span class="status {{ $employee->is_active ? 'paid' : 'cancelled' }}">{{ $employee->is_active ? 'Ativo' : 'Inativo' }}</span></td>
                         <td class="actions">
