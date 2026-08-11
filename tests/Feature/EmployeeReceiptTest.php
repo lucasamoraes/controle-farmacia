@@ -83,6 +83,63 @@ class EmployeeReceiptTest extends TestCase
         ]);
     }
 
+    public function test_sunday_or_holiday_work_can_be_paid_outside_or_added_to_payroll(): void
+    {
+        [$company, $finance] = $this->companyWithUser('finance');
+        $employee = Employee::create([
+            'company_id' => $company->id,
+            'name' => 'Joao Balcao',
+            'salary' => 1800,
+            'fixed_salary' => 1800,
+            'base_salary' => 1800,
+            'payment_day' => 5,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($finance)
+            ->post("/funcionarios/{$employee->id}/recibo/eventos", [
+                'reference_month' => '2026-08',
+                'event_type' => 'sunday_work',
+                'worked_date' => '2026-08-09',
+                'paid_outside' => 1,
+                'description' => 'Trabalho domingo',
+                'earning' => 120,
+            ])
+            ->assertRedirect("/funcionarios/{$employee->id}/recibo?mes=2026-08");
+
+        $this->actingAs($finance)
+            ->post("/funcionarios/{$employee->id}/recibo/eventos", [
+                'reference_month' => '2026-08',
+                'event_type' => 'holiday_work',
+                'worked_date' => '2026-08-15',
+                'description' => 'Trabalho feriado',
+                'earning' => 150,
+            ])
+            ->assertRedirect("/funcionarios/{$employee->id}/recibo?mes=2026-08");
+
+        $this->assertDatabaseHas('employee_payroll_items', [
+            'employee_id' => $employee->id,
+            'event_type' => 'sunday_work',
+            'worked_date' => '2026-08-09 00:00:00',
+            'paid_outside' => true,
+            'earning' => 120,
+        ]);
+        $this->assertDatabaseHas('employee_payroll_items', [
+            'employee_id' => $employee->id,
+            'event_type' => 'holiday_work',
+            'worked_date' => '2026-08-15 00:00:00',
+            'paid_outside' => false,
+            'earning' => 150,
+        ]);
+        $this->assertDatabaseHas('payables', [
+            'company_id' => $company->id,
+            'description' => 'Trabalho domingo - Joao Balcao - 09/08/2026',
+            'amount' => 120,
+            'status' => 'paid',
+            'source' => 'employee_extra_paid',
+        ]);
+    }
+
     private function companyWithUser(string $role): array
     {
         $company = Company::create([

@@ -231,7 +231,9 @@ class EmployeeController extends Controller
         abort_unless($funcionario->company_id === $company->id, 404);
         $data = $request->validate([
             'reference_month' => ['required', 'date_format:Y-m'],
-            'event_type' => ['required', 'in:vale,bonus,thirteenth,vacation,discount,earning'],
+            'event_type' => ['required', 'in:vale,bonus,thirteenth,vacation,discount,earning,sunday_work,holiday_work'],
+            'worked_date' => ['nullable', 'date'],
+            'paid_outside' => ['nullable', 'boolean'],
             'code' => ['nullable', 'string', 'max:50'],
             'description' => ['required', 'string', 'max:255'],
             'reference' => ['nullable', 'string', 'max:255'],
@@ -243,8 +245,19 @@ class EmployeeController extends Controller
         $amount = $isDeduction ? (float) ($data['deduction'] ?: $data['earning'] ?: 0) : (float) ($data['earning'] ?: $data['deduction'] ?: 0);
         $data['earning'] = $isDeduction ? 0 : $amount;
         $data['deduction'] = $isDeduction ? $amount : 0;
+        $isOutsideWork = in_array($data['event_type'], ['sunday_work', 'holiday_work'], true);
+        $data['paid_outside'] = $isOutsideWork && $request->boolean('paid_outside');
+        $data['paid_at'] = $data['paid_outside'] ? now()->toDateString() : null;
+        if (! $isOutsideWork) {
+            $data['worked_date'] = null;
+            $data['paid_outside'] = false;
+            $data['paid_at'] = null;
+        }
 
-        $funcionario->payrollItems()->create($data);
+        $item = $funcionario->payrollItems()->create($data);
+        if ($item->paid_outside && $amount > 0) {
+            $this->createPaidOutsideWorkPayable($company, $funcionario, $item);
+        }
         $this->syncPayrollForecast($company);
 
         return redirect()->route('funcionarios.recibo', ['funcionario' => $funcionario, 'mes' => Carbon::parse($data['reference_month'])->format('Y-m')])->with('status', 'Evento do recibo cadastrado.');
@@ -486,6 +499,7 @@ class EmployeeController extends Controller
             $eventTotal = (float) EmployeePayrollItem::query()
                 ->whereIn('employee_id', $employeeIds)
                 ->whereDate('reference_month', $month->toDateString())
+                ->where('paid_outside', false)
                 ->sum(DB::raw('earning - deduction'));
             $advanceTotal = (float) EmployeeAdvance::query()
                 ->whereIn('employee_id', $employeeIds)
@@ -509,6 +523,27 @@ class EmployeeController extends Controller
                 'FUNC-FOLHA-'.$month->format('Y-m')
             );
         }
+    }
+
+    private function createPaidOutsideWorkPayable(Company $company, Employee $employee, EmployeePayrollItem $item): void
+    {
+        $category = $this->employeeCategory($company);
+        $workedDate = $item->worked_date ?: $item->reference_month;
+        $label = $item->event_type === 'holiday_work' ? 'Trabalho feriado' : 'Trabalho domingo';
+
+        $company->payables()->updateOrCreate([
+            'source' => 'employee_extra_paid',
+            'document_number' => 'FUNC-EXTRA-'.$item->id,
+        ], [
+            'financial_category_id' => $category->id,
+            'description' => $label.' - '.$employee->name.' - '.$workedDate->format('d/m/Y'),
+            'amount' => (float) $item->earning,
+            'due_date' => $workedDate->toDateString(),
+            'status' => 'paid',
+            'paid_at' => $item->paid_at ?: now()->toDateString(),
+            'account_type' => 'boleto',
+            'notes' => 'Movimento de funcionario pago por fora da folha.',
+        ]);
     }
 
     private function validMonth(mixed $value): ?string

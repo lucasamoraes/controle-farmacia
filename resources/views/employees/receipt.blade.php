@@ -88,14 +88,24 @@
             <h2 class="panel-title">Eventos do recibo</h2>
             <div class="table-wrap"><table>
                 <thead>
-                    <tr><th>Codigo</th><th>Descricao</th><th>Referencia</th><th>Vencimentos</th><th>Descontos</th><th></th></tr>
+                    <tr><th>Codigo</th><th>Descricao</th><th>Data</th><th>Referencia</th><th>Pagamento</th><th>Vencimentos</th><th>Descontos</th><th></th></tr>
                 </thead>
                 <tbody>
                 @forelse ($payrollItems as $item)
                     <tr>
                         <td>{{ $item->code ?? '-' }}</td>
                         <td><strong>{{ $item->description }}</strong></td>
+                        <td>{{ ! empty($item->worked_date) ? $item->worked_date->format('d/m/Y') : '-' }}</td>
                         <td>{{ $item->reference ?? '-' }}</td>
+                        <td>
+                            @if (! empty($item->paid_outside))
+                                <span class="status paid">Pago por fora</span>
+                            @elseif (in_array($item->event_type ?? '', ['sunday_work', 'holiday_work'], true))
+                                <span class="status open">Na folha</span>
+                            @else
+                                -
+                            @endif
+                        </td>
                         <td>R$ {{ number_format($item->earning, 2, ',', '.') }}</td>
                         <td>R$ {{ number_format($item->deduction, 2, ',', '.') }}</td>
                         <td>
@@ -111,7 +121,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6">Nenhum evento cadastrado para este mes.</td></tr>
+                    <tr><td colspan="8">Nenhum evento cadastrado para este mes.</td></tr>
                 @endforelse
                 </tbody>
             </table></div>
@@ -128,10 +138,25 @@
                             <option value="bonus">Bonificacao</option>
                             <option value="thirteenth">13 salario</option>
                             <option value="vacation">Ferias</option>
+                            <option value="sunday_work">Trabalho domingo</option>
+                            <option value="holiday_work">Trabalho feriado</option>
                             <option value="discount">Desconto / imposto</option>
                             <option value="earning">Outro acrescimo</option>
                         </select>
                     </label>
+                    <div class="field-grid">
+                        <label>Data trabalhada
+                            <input type="date" name="worked_date" value="{{ old('worked_date') }}">
+                            @error('worked_date') <span class="error">{{ $message }}</span> @enderror
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; padding-top:24px;">
+                            <input type="checkbox" name="paid_outside" value="1" style="width:auto; min-height:auto;">
+                            Ja foi pago por fora
+                        </label>
+                    </div>
+                    <div class="alert info" style="margin:0;">
+                        Trabalho domingo e feriado nao entram na base de impostos. Se ja foi pago, o sistema registra como despesa paga; se nao, entra na folha do mes.
+                    </div>
                     <div class="field-grid">
                         <label>Codigo
                             <input name="code" value="{{ old('code') }}" placeholder="Ex: 1">

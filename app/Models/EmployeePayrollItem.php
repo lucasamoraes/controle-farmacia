@@ -11,6 +11,9 @@ class EmployeePayrollItem extends Model
         'employee_id',
         'reference_month',
         'event_type',
+        'worked_date',
+        'paid_outside',
+        'paid_at',
         'code',
         'description',
         'reference',
@@ -20,6 +23,9 @@ class EmployeePayrollItem extends Model
 
     protected $casts = [
         'reference_month' => 'date',
+        'worked_date' => 'date',
+        'paid_outside' => 'boolean',
+        'paid_at' => 'date',
         'earning' => 'decimal:2',
         'deduction' => 'decimal:2',
     ];
