@@ -10,7 +10,7 @@
     $maxWeekday = max(collect($weekdayAverageChart)->max('value') ?? 0, 1);
     $maxChannel = max(collect($channelRevenueChart)->map(fn ($row) => ($row['delivery'] ?? 0) + ($row['counter'] ?? 0))->max() ?? 0, 1);
     $maxExpense = max(collect($monthlyExpenseChart)->max('value') ?? 0, 1);
-    $maxEmployeeMonth = max(collect($employeeDashboard['monthly'])->max('total') ?? 0, 1);
+    $maxMovementType = max(collect($employeeDashboard['movementTypes'])->max('total') ?? 0, 1);
     $maxEmployeeTop = max(collect($employeeDashboard['topEmployees'])->max('total') ?? 0, 1);
     $canWriteFinance = auth()->user()->canWriteFinance($company);
     $tabFilters = array_filter([
@@ -263,18 +263,18 @@
 
         <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-bottom:18px;">
             <section class="card">
-                <h2 class="panel-title">Folha mensal</h2>
+                <h2 class="panel-title">Tipos de movimento</h2>
                 <div class="bar-list">
-                    @forelse ($employeeDashboard['monthly'] as $row)
+                    @forelse ($employeeDashboard['movementTypes'] as $row)
                         <div class="bar-row">
-                            <div class="bar-meta"><span>{{ $row['label'] }}</span><span>Fixo {{ $fmtMoney($row['fixed']) }} | Variavel {{ $fmtMoney($row['variable']) }}</span></div>
-                            <div class="bar-track" style="height:12px; display:flex;">
-                                <div style="height:100%; width:{{ $row['total'] > 0 ? ($row['fixed'] / $maxEmployeeMonth) * 100 : 0 }}%; background:var(--brand);"></div>
-                                <div style="height:100%; width:{{ $row['total'] > 0 ? ($row['variable'] / $maxEmployeeMonth) * 100 : 0 }}%; background:#2563eb;"></div>
+                            <div class="bar-meta">
+                                <span>{{ $row['label'] }}</span>
+                                <span>{{ $row['kind'] === 'debit' ? 'Desconto' : 'Acrescimo' }} {{ $fmtMoney($row['total']) }}</span>
                             </div>
+                            <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($row['total'] / $maxMovementType) * 100) }}%; --c:{{ $row['kind'] === 'debit' ? 'var(--danger)' : 'var(--brand)' }};"></div></div>
                         </div>
                     @empty
-                        <p class="subtitle">Nenhuma despesa de funcionario no periodo.</p>
+                        <p class="subtitle">Nenhum movimento de funcionario no periodo.</p>
                     @endforelse
                 </div>
             </section>

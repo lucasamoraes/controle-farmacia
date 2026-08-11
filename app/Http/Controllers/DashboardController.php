@@ -287,6 +287,31 @@ class DashboardController extends Controller
             ->where('employees.company_id', $company->id)
             ->whereBetween('employee_advances.deduct_month', [$monthStart->toDateString(), $monthEnd->toDateString()])
             ->sum('employee_advances.amount');
+        $movementTypes = DB::table('employee_payroll_items')
+            ->join('employees', 'employees.id', '=', 'employee_payroll_items.employee_id')
+            ->leftJoin('employee_movement_types', function ($join) use ($company) {
+                $join->on('employee_movement_types.code', '=', 'employee_payroll_items.event_type')
+                    ->where('employee_movement_types.company_id', '=', $company->id);
+            })
+            ->where('employees.company_id', $company->id)
+            ->whereBetween('employee_payroll_items.reference_month', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->groupBy('employee_payroll_items.event_type', 'employee_movement_types.name', 'employee_movement_types.kind')
+            ->orderByDesc(DB::raw('SUM(employee_payroll_items.earning + employee_payroll_items.deduction)'))
+            ->get([
+                DB::raw("COALESCE(employee_movement_types.name, employee_payroll_items.event_type, 'Movimento') as label"),
+                DB::raw("COALESCE(employee_movement_types.kind, CASE WHEN SUM(employee_payroll_items.deduction) > SUM(employee_payroll_items.earning) THEN 'debit' ELSE 'credit' END) as kind"),
+                DB::raw('SUM(employee_payroll_items.earning) as earnings'),
+                DB::raw('SUM(employee_payroll_items.deduction) as deductions'),
+                DB::raw('SUM(employee_payroll_items.earning + employee_payroll_items.deduction) as total'),
+            ])
+            ->map(fn ($row) => [
+                'label' => $row->label,
+                'kind' => $row->kind,
+                'earnings' => (float) $row->earnings,
+                'deductions' => (float) $row->deductions,
+                'total' => (float) $row->total,
+            ])
+            ->all();
 
         return [
             'activeCount' => $activeEmployees->count(),
@@ -296,6 +321,7 @@ class DashboardController extends Controller
             'openTotal' => max(0, $baseTotal - $advanceTotal),
             'paidTotal' => 0,
             'monthly' => $monthly->all(),
+            'movementTypes' => $movementTypes,
             'topEmployees' => $activeEmployees
                 ->map(fn ($employee) => ['name' => $employee->name, 'total' => (float) $employee->base_salary])
                 ->sortByDesc('total')
