@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\EmployeeAdvance;
+use App\Models\EmployeeMovementType;
 use App\Models\EmployeePayrollItem;
 use App\Models\FinancialCategory;
 use App\Services\PayrollCalculator;
@@ -17,7 +18,7 @@ use Illuminate\View\View;
 
 class EmployeeController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, PayrollCalculator $calculator): View
     {
         $company = $this->company();
         $category = $this->employeeCategory($company);
@@ -50,6 +51,8 @@ class EmployeeController extends Controller
             ->orderBy('due_date')
             ->get();
 
+        $monthNetPayrollTotal = $this->monthlyPayrollAmount($company, $monthStart, $calculator);
+
         return view('employees.index', [
             'company' => $company,
             'employees' => $employees,
@@ -58,7 +61,7 @@ class EmployeeController extends Controller
             'search' => $search,
             'statusFilter' => $status,
             'activeFixedPayrollTotal' => $company->employees()->where('is_active', true)->sum('base_salary'),
-            'activeVariablePayrollTotal' => 0,
+            'monthNetPayrollTotal' => $monthNetPayrollTotal,
             'activePayrollTotal' => $company->employees()->where('is_active', true)->sum('base_salary'),
             'monthExpenseTotal' => $monthExpenses->where('status', '!=', 'cancelled')->sum('amount'),
             'monthOpenTotal' => $monthExpenses->where('status', 'open')->sum('amount'),
@@ -126,6 +129,10 @@ class EmployeeController extends Controller
             'earningsTotal' => $payrollItems->sum('earning'),
             'deductionsTotal' => $payrollItems->sum('deduction') + $advances->sum('amount'),
             'advancesTotal' => $advances->sum('amount'),
+            'movementTypes' => $this->ensureDefaultMovementTypes($company)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -231,24 +238,28 @@ class EmployeeController extends Controller
         abort_unless($funcionario->company_id === $company->id, 404);
         $data = $request->validate([
             'reference_month' => ['required', 'date_format:Y-m'],
-            'event_type' => ['required', 'in:vale,bonus,thirteenth,vacation,discount,earning,sunday_work,holiday_work'],
+            'movement_type_id' => ['nullable', 'integer'],
+            'event_type' => ['nullable', 'string', 'max:80'],
             'worked_date' => ['nullable', 'date'],
             'paid_outside' => ['nullable', 'boolean'],
             'code' => ['nullable', 'string', 'max:50'],
             'description' => ['required', 'string', 'max:255'],
-            'reference' => ['nullable', 'string', 'max:255'],
             'earning' => ['nullable', 'numeric', 'min:0'],
             'deduction' => ['nullable', 'numeric', 'min:0'],
         ]);
-        $data['reference_month'] = Carbon::createFromFormat('Y-m-d', $data['reference_month'].'-01')->startOfMonth()->toDateString();
-        $isDeduction = in_array($data['event_type'], ['vale', 'discount'], true);
-        $amount = $isDeduction ? (float) ($data['deduction'] ?: $data['earning'] ?: 0) : (float) ($data['earning'] ?: $data['deduction'] ?: 0);
+        $monthStart = Carbon::createFromFormat('Y-m-d', $data['reference_month'].'-01')->startOfMonth();
+        $type = $this->movementTypeForRequest($company, $data);
+        $data['reference_month'] = $monthStart->toDateString();
+        $data['event_type'] = $type->code;
+        $data['reference'] = null;
+        $data['code'] = ($data['code'] ?? null) ?: $type->code;
+        $isDeduction = $type->kind === 'debit';
+        $amount = $isDeduction ? (float) ($data['deduction'] ?: 0) : (float) ($data['earning'] ?: 0);
         $data['earning'] = $isDeduction ? 0 : $amount;
         $data['deduction'] = $isDeduction ? $amount : 0;
-        $isOutsideWork = in_array($data['event_type'], ['sunday_work', 'holiday_work'], true);
-        $data['paid_outside'] = $isOutsideWork && $request->boolean('paid_outside');
+        $data['paid_outside'] = $type->allows_paid_outside && $request->boolean('paid_outside');
         $data['paid_at'] = $data['paid_outside'] ? now()->toDateString() : null;
-        if (! $isOutsideWork) {
+        if (! $type->requires_worked_date) {
             $data['worked_date'] = null;
             $data['paid_outside'] = false;
             $data['paid_at'] = null;
@@ -258,7 +269,7 @@ class EmployeeController extends Controller
         if ($item->paid_outside && $amount > 0) {
             $this->createPaidOutsideWorkPayable($company, $funcionario, $item);
         }
-        $this->syncPayrollForecast($company);
+        $this->syncPayrollForecast($company, $monthStart);
 
         return redirect()->route('funcionarios.recibo', ['funcionario' => $funcionario, 'mes' => Carbon::parse($data['reference_month'])->format('Y-m')])->with('status', 'Evento do recibo cadastrado.');
     }
@@ -268,8 +279,16 @@ class EmployeeController extends Controller
         $company = $this->company();
         abort_unless($item->employee->company_id === $company->id, 404);
         $month = $item->reference_month->format('Y-m');
+        $monthStart = $item->reference_month->copy()->startOfMonth();
         $employee = $item->employee;
+        if ($item->paid_outside) {
+            $company->payables()
+                ->where('source', 'employee_extra_paid')
+                ->where('document_number', 'FUNC-EXTRA-'.$item->id)
+                ->delete();
+        }
         $item->delete();
+        $this->syncPayrollForecast($company, $monthStart);
 
         return redirect()->route('funcionarios.recibo', ['funcionario' => $employee, 'mes' => $month])->with('status', 'Evento removido.');
     }
@@ -290,7 +309,7 @@ class EmployeeController extends Controller
             : Carbon::parse($data['advance_date'])->addMonthNoOverflow()->startOfMonth()->toDateString();
 
         $funcionario->advances()->create($data);
-        $this->syncPayrollForecast($company);
+        $this->syncPayrollForecast($company, Carbon::parse($data['deduct_month'])->startOfMonth());
 
         return redirect()->route('funcionarios.recibo', ['funcionario' => $funcionario, 'mes' => Carbon::parse($data['deduct_month'])->format('Y-m')])->with('status', 'Vale cadastrado.');
     }
@@ -300,8 +319,10 @@ class EmployeeController extends Controller
         $company = $this->company();
         abort_unless($vale->employee->company_id === $company->id, 404);
         $month = ($vale->deduct_month ?: $vale->advance_date)->format('Y-m');
+        $monthStart = ($vale->deduct_month ?: $vale->advance_date)->copy()->startOfMonth();
         $employee = $vale->employee;
         $vale->delete();
+        $this->syncPayrollForecast($company, $monthStart);
 
         return redirect()->route('funcionarios.recibo', ['funcionario' => $employee, 'mes' => $month])->with('status', 'Vale removido.');
     }
@@ -480,6 +501,7 @@ class EmployeeController extends Controller
     private function syncPayrollForecast(Company $company, ?Carbon $startMonth = null): void
     {
         $category = $this->employeeCategory($company);
+        $calculator = app(PayrollCalculator::class);
         $start = ($startMonth ?: now())->copy()->startOfMonth();
         $end = $start->copy()->addMonths(11)->startOfMonth();
 
@@ -494,18 +516,7 @@ class EmployeeController extends Controller
                 })
                 ->get();
 
-            $baseTotal = (float) $employees->sum(fn ($employee) => $this->employeeBaseSalary($employee));
-            $employeeIds = $employees->pluck('id');
-            $eventTotal = (float) EmployeePayrollItem::query()
-                ->whereIn('employee_id', $employeeIds)
-                ->whereDate('reference_month', $month->toDateString())
-                ->where('paid_outside', false)
-                ->sum(DB::raw('earning - deduction'));
-            $advanceTotal = (float) EmployeeAdvance::query()
-                ->whereIn('employee_id', $employeeIds)
-                ->whereDate('deduct_month', $month->toDateString())
-                ->sum('amount');
-            $amount = max(0, $baseTotal + $eventTotal - $advanceTotal);
+            $amount = $this->monthlyPayrollAmount($company, $month, $calculator, $employees);
             $paymentDay = (int) min(max((int) ($employees->max('payment_day') ?: 5), 1), 28);
             $dueDate = $month->copy()->addMonthNoOverflow()->day($paymentDay);
 
@@ -544,6 +555,71 @@ class EmployeeController extends Controller
             'account_type' => 'boleto',
             'notes' => 'Movimento de funcionario pago por fora da folha.',
         ]);
+    }
+
+    private function monthlyPayrollAmount(Company $company, Carbon $month, PayrollCalculator $calculator, mixed $employees = null): float
+    {
+        $month = $month->copy()->startOfMonth();
+        $employees = $employees ?: $company->employees()
+            ->where('is_active', true)
+            ->where(function ($query) use ($month) {
+                $query->whereNull('starts_on')->orWhereDate('starts_on', '<=', $month->copy()->endOfMonth());
+            })
+            ->where(function ($query) use ($month) {
+                $query->whereNull('ends_on')->orWhereDate('ends_on', '>=', $month);
+            })
+            ->get();
+        $employeeIds = $employees->pluck('id');
+        $automaticTotal = (float) $employees->sum(function (Employee $employee) use ($calculator) {
+            return collect($this->automaticPayrollItems($employee, $calculator))->sum(fn ($item) => (float) $item->earning - (float) $item->deduction);
+        });
+        $eventTotal = (float) EmployeePayrollItem::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->whereDate('reference_month', $month->toDateString())
+            ->where('paid_outside', false)
+            ->sum(DB::raw('earning - deduction'));
+        $advanceTotal = (float) EmployeeAdvance::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->whereDate('deduct_month', $month->toDateString())
+            ->sum('amount');
+
+        return max(0, $automaticTotal + $eventTotal - $advanceTotal);
+    }
+
+    private function movementTypeForRequest(Company $company, array $data): EmployeeMovementType
+    {
+        $query = $this->ensureDefaultMovementTypes($company);
+        if (! empty($data['movement_type_id'])) {
+            $type = $query->where('id', $data['movement_type_id'])->first();
+            if ($type) {
+                return $type;
+            }
+        }
+
+        return $query->where('code', $data['event_type'] ?? 'earning')->firstOrFail();
+    }
+
+    private function ensureDefaultMovementTypes(Company $company)
+    {
+        foreach ($this->defaultMovementTypes() as $type) {
+            $company->employeeMovementTypes()->firstOrCreate(['code' => $type['code']], $type);
+        }
+
+        return $company->employeeMovementTypes();
+    }
+
+    private function defaultMovementTypes(): array
+    {
+        return [
+            ['code' => 'vale', 'name' => 'Vale / adiantamento', 'kind' => 'debit', 'requires_worked_date' => false, 'allows_paid_outside' => false, 'is_taxable' => false, 'is_active' => true],
+            ['code' => 'bonus', 'name' => 'Bonificacao', 'kind' => 'credit', 'requires_worked_date' => false, 'allows_paid_outside' => false, 'is_taxable' => true, 'is_active' => true],
+            ['code' => 'thirteenth', 'name' => '13 salario', 'kind' => 'credit', 'requires_worked_date' => false, 'allows_paid_outside' => false, 'is_taxable' => true, 'is_active' => true],
+            ['code' => 'vacation', 'name' => 'Ferias', 'kind' => 'credit', 'requires_worked_date' => false, 'allows_paid_outside' => false, 'is_taxable' => true, 'is_active' => true],
+            ['code' => 'sunday_work', 'name' => 'Trabalho domingo', 'kind' => 'credit', 'requires_worked_date' => true, 'allows_paid_outside' => true, 'is_taxable' => false, 'is_active' => true],
+            ['code' => 'holiday_work', 'name' => 'Trabalho feriado', 'kind' => 'credit', 'requires_worked_date' => true, 'allows_paid_outside' => true, 'is_taxable' => false, 'is_active' => true],
+            ['code' => 'discount', 'name' => 'Desconto / imposto', 'kind' => 'debit', 'requires_worked_date' => false, 'allows_paid_outside' => false, 'is_taxable' => false, 'is_active' => true],
+            ['code' => 'earning', 'name' => 'Outro acrescimo', 'kind' => 'credit', 'requires_worked_date' => false, 'allows_paid_outside' => false, 'is_taxable' => true, 'is_active' => true],
+        ];
     }
 
     private function validMonth(mixed $value): ?string

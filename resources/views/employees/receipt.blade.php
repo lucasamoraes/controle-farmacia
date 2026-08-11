@@ -88,7 +88,7 @@
             <h2 class="panel-title">Eventos do recibo</h2>
             <div class="table-wrap"><table>
                 <thead>
-                    <tr><th>Codigo</th><th>Descricao</th><th>Data</th><th>Referencia</th><th>Pagamento</th><th>Vencimentos</th><th>Descontos</th><th></th></tr>
+                    <tr><th>Codigo</th><th>Descricao</th><th>Data</th><th>Pagamento</th><th>Vencimentos</th><th>Descontos</th><th></th></tr>
                 </thead>
                 <tbody>
                 @forelse ($payrollItems as $item)
@@ -96,7 +96,6 @@
                         <td>{{ $item->code ?? '-' }}</td>
                         <td><strong>{{ $item->description }}</strong></td>
                         <td>{{ ! empty($item->worked_date) ? $item->worked_date->format('d/m/Y') : '-' }}</td>
-                        <td>{{ $item->reference ?? '-' }}</td>
                         <td>
                             @if (! empty($item->paid_outside))
                                 <span class="status paid">Pago por fora</span>
@@ -121,7 +120,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8">Nenhum evento cadastrado para este mes.</td></tr>
+                    <tr><td colspan="7">Nenhum evento cadastrado para este mes.</td></tr>
                 @endforelse
                 </tbody>
             </table></div>
@@ -131,20 +130,22 @@
                     @csrf
                     <input type="hidden" name="reference_month" value="{{ $month }}">
                     <h3 class="panel-title">Adicionar movimento</h3>
-                    <p class="subtitle" style="margin-bottom:10px;">Use para vale, bonificacao, 13 salario, ferias, desconto ou outro acrescimo.</p>
+                    <p class="subtitle" style="margin-bottom:10px;">Use para vale, bonificacao, 13 salario, ferias, desconto ou outro movimento cadastrado.</p>
                     <label>Tipo
-                        <select name="event_type" required>
-                            <option value="vale">Vale / adiantamento</option>
-                            <option value="bonus">Bonificacao</option>
-                            <option value="thirteenth">13 salario</option>
-                            <option value="vacation">Ferias</option>
-                            <option value="sunday_work">Trabalho domingo</option>
-                            <option value="holiday_work">Trabalho feriado</option>
-                            <option value="discount">Desconto / imposto</option>
-                            <option value="earning">Outro acrescimo</option>
+                        <select name="movement_type_id" required data-movement-type>
+                            @foreach ($movementTypes as $type)
+                                <option value="{{ $type->id }}"
+                                    data-code="{{ $type->code }}"
+                                    data-kind="{{ $type->kind }}"
+                                    data-worked-date="{{ $type->requires_worked_date ? '1' : '0' }}"
+                                    data-paid-outside="{{ $type->allows_paid_outside ? '1' : '0' }}"
+                                >
+                                    {{ $type->name }}
+                                </option>
+                            @endforeach
                         </select>
                     </label>
-                    <div class="field-grid">
+                    <div class="field-grid" data-work-fields hidden>
                         <label>Data trabalhada
                             <input type="date" name="worked_date" value="{{ old('worked_date') }}">
                             @error('worked_date') <span class="error">{{ $message }}</span> @enderror
@@ -167,16 +168,12 @@
                             @error('description') <span class="error">{{ $message }}</span> @enderror
                         </label>
                     </div>
-                    <div class="field-grid">
-                        <label>Referencia
-                            <input name="reference" value="{{ old('reference') }}" placeholder="Ex: 220,00">
-                            @error('reference') <span class="error">{{ $message }}</span> @enderror
-                        </label>
-                        <label>Valor a acrescentar
+                    <div class="field-grid" style="grid-template-columns:1fr;">
+                        <label data-credit-field>Valor a acrescentar
                             <input type="number" step="0.01" min="0" name="earning" value="{{ old('earning', 0) }}">
                             @error('earning') <span class="error">{{ $message }}</span> @enderror
                         </label>
-                        <label>Valor a descontar
+                        <label data-debit-field hidden>Valor a descontar
                             <input type="number" step="0.01" min="0" name="deduction" value="{{ old('deduction', 0) }}">
                             @error('deduction') <span class="error">{{ $message }}</span> @enderror
                         </label>
@@ -235,4 +232,25 @@
             </tbody>
         </table></div>
     </section>
+    <script>
+        const movementSelect = document.querySelector('[data-movement-type]');
+        const workFields = document.querySelector('[data-work-fields]');
+        const creditField = document.querySelector('[data-credit-field]');
+        const debitField = document.querySelector('[data-debit-field]');
+        const earningInput = creditField?.querySelector('input');
+        const deductionInput = debitField?.querySelector('input');
+        const updateMovementFields = () => {
+            const option = movementSelect?.selectedOptions?.[0];
+            if (!option) return;
+            const isDebit = option.dataset.kind === 'debit';
+            const hasWorkDate = option.dataset.workedDate === '1';
+            if (workFields) workFields.hidden = !hasWorkDate;
+            if (creditField) creditField.hidden = isDebit;
+            if (debitField) debitField.hidden = !isDebit;
+            if (isDebit && earningInput) earningInput.value = '0';
+            if (!isDebit && deductionInput) deductionInput.value = '0';
+        };
+        movementSelect?.addEventListener('change', updateMovementFields);
+        updateMovementFields();
+    </script>
 @endsection

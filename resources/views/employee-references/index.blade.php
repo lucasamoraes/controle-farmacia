@@ -47,6 +47,40 @@
         </form>
     </details>
 
+    <details class="card" style="margin-top:12px;">
+        <summary style="cursor:pointer; font-weight:800;">Adicionar novo tipo de movimento</summary>
+        <form class="form" method="post" action="{{ route('configuracoes.funcionarios.movimentos.store') }}" style="margin-top:14px;" data-confirm-title="Salvar movimento" data-confirm-message="Deseja cadastrar este tipo de movimento?" data-confirm-button="Salvar">
+            @csrf
+            <h2 class="panel-title">Novo tipo de movimento</h2>
+            <label>Nome
+                <input name="name" required placeholder="Ex: Bonificacao, vale, trabalho domingo">
+            </label>
+            <div class="field-grid">
+                <label>Tipo financeiro
+                    <select name="kind" required>
+                        <option value="credit">Credito / acrescenta</option>
+                        <option value="debit">Debito / desconta</option>
+                    </select>
+                </label>
+                <label>Impostos
+                    <select name="is_taxable">
+                        <option value="1">Entra na base de impostos</option>
+                        <option value="0">Nao entra na base de impostos</option>
+                    </select>
+                </label>
+            </div>
+            <label style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="requires_worked_date" value="1" style="width:auto; min-height:auto;">
+                Pedir data trabalhada
+            </label>
+            <label style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="allows_paid_outside" value="1" style="width:auto; min-height:auto;">
+                Permitir marcar como pago por fora
+            </label>
+            <button class="btn" type="submit">Cadastrar movimento</button>
+        </form>
+    </details>
+
     <form class="filter-bar" method="get" action="{{ route('configuracoes.funcionarios.index') }}">
         <div class="filter-grid" style="grid-template-columns:minmax(240px, 1fr) auto;">
             <label>Buscar cadastro
@@ -137,4 +171,73 @@
             </table></div>
         </section>
     </div>
+
+    <section class="card" style="margin-top:22px;">
+        <h2 class="panel-title">Tipos de movimento</h2>
+        <div class="table-wrap"><table>
+            <thead><tr><th>Movimento</th><th>Tipo</th><th>Regras</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+            @forelse ($movementTypes as $movement)
+                <tr>
+                    <td>
+                        <strong data-read-row="movement-{{ $movement->id }}">{{ $movement->name }}</strong>
+                        <form id="movement-{{ $movement->id }}" method="post" action="{{ route('configuracoes.funcionarios.movimentos.update', $movement) }}" hidden data-confirm-title="Salvar movimento" data-confirm-message="Deseja salvar as alteracoes deste tipo de movimento?" data-confirm-button="Salvar">
+                            @csrf
+                            @method('put')
+                            <input name="name" value="{{ $movement->name }}" required>
+                        </form>
+                    </td>
+                    <td>
+                        <span data-read-row="movement-{{ $movement->id }}">{{ $movement->kind === 'debit' ? 'Debito' : 'Credito' }}</span>
+                        <select name="kind" form="movement-{{ $movement->id }}" hidden data-edit-field="movement-{{ $movement->id }}">
+                            <option value="credit" @selected($movement->kind === 'credit')>Credito / acrescenta</option>
+                            <option value="debit" @selected($movement->kind === 'debit')>Debito / desconta</option>
+                        </select>
+                    </td>
+                    <td>
+                        <span data-read-row="movement-{{ $movement->id }}">
+                            {{ $movement->is_taxable ? 'Com impostos' : 'Sem impostos' }}
+                            @if ($movement->requires_worked_date) · pede data @endif
+                            @if ($movement->allows_paid_outside) · pago por fora @endif
+                        </span>
+                        <div hidden data-edit-field="movement-{{ $movement->id }}" style="display:grid; gap:6px;">
+                            <select name="is_taxable" form="movement-{{ $movement->id }}">
+                                <option value="1" @selected($movement->is_taxable)>Entra na base de impostos</option>
+                                <option value="0" @selected(! $movement->is_taxable)>Nao entra na base de impostos</option>
+                            </select>
+                            <select name="requires_worked_date" form="movement-{{ $movement->id }}">
+                                <option value="0" @selected(! $movement->requires_worked_date)>Nao pedir data trabalhada</option>
+                                <option value="1" @selected($movement->requires_worked_date)>Pedir data trabalhada</option>
+                            </select>
+                            <select name="allows_paid_outside" form="movement-{{ $movement->id }}">
+                                <option value="0" @selected(! $movement->allows_paid_outside)>Nao permitir pago por fora</option>
+                                <option value="1" @selected($movement->allows_paid_outside)>Permitir pago por fora</option>
+                            </select>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="status {{ $movement->is_active ? 'paid' : 'cancelled' }}" data-read-row="movement-{{ $movement->id }}">{{ $movement->is_active ? 'Ativo' : 'Inativo' }}</span>
+                        <select name="is_active" form="movement-{{ $movement->id }}" hidden data-edit-field="movement-{{ $movement->id }}">
+                            <option value="1" @selected($movement->is_active)>Ativo</option>
+                            <option value="0" @selected(! $movement->is_active)>Inativo</option>
+                        </select>
+                    </td>
+                    <td class="actions">
+                        <button class="btn small secondary" type="button" data-edit-toggle="movement-{{ $movement->id }}">Editar</button>
+                        <button class="btn small" type="submit" form="movement-{{ $movement->id }}" hidden data-save-button="movement-{{ $movement->id }}">Salvar</button>
+                        @if ($movement->is_active)
+                            <form method="post" action="{{ route('configuracoes.funcionarios.movimentos.destroy', $movement) }}" data-confirm-title="Inativar movimento" data-confirm-message="Deseja inativar este tipo de movimento?" data-confirm-button="Inativar" data-confirm-danger="1">
+                                @csrf
+                                @method('delete')
+                                <button class="btn small danger" type="submit">Inativar</button>
+                            </form>
+                        @endif
+                    </td>
+                </tr>
+            @empty
+                <tr><td colspan="5">Nenhum tipo de movimento cadastrado.</td></tr>
+            @endforelse
+            </tbody>
+        </table></div>
+    </section>
 @endsection

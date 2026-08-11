@@ -76,6 +76,11 @@ class Company extends Model
         return $this->hasMany(EmployeeDepartment::class);
     }
 
+    public function employeeMovementTypes(): HasMany
+    {
+        return $this->hasMany(EmployeeMovementType::class);
+    }
+
     public function boletoUploads(): HasMany
     {
         return $this->hasMany(BoletoUpload::class);

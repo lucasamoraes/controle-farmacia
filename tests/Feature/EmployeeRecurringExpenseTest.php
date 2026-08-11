@@ -39,7 +39,7 @@ class EmployeeRecurringExpenseTest extends TestCase
         $this->assertDatabaseHas('payables', [
             'company_id' => $company->id,
             'description' => 'Folha funcionarios - 08/2026',
-            'amount' => 2500,
+            'amount' => 2299.31,
             'due_date' => '2026-09-05 00:00:00',
             'status' => 'open',
             'source' => 'employee_recurring',

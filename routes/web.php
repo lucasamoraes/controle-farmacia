@@ -134,6 +134,9 @@ Route::middleware('auth')->group(function () {
         Route::post('configuracoes/funcionarios/departamentos', [EmployeeReferenceController::class, 'storeDepartment'])->name('configuracoes.funcionarios.departamentos.store');
         Route::put('configuracoes/funcionarios/departamentos/{departamento}', [EmployeeReferenceController::class, 'updateDepartment'])->name('configuracoes.funcionarios.departamentos.update');
         Route::delete('configuracoes/funcionarios/departamentos/{departamento}', [EmployeeReferenceController::class, 'destroyDepartment'])->name('configuracoes.funcionarios.departamentos.destroy');
+        Route::post('configuracoes/funcionarios/movimentos', [EmployeeReferenceController::class, 'storeMovementType'])->name('configuracoes.funcionarios.movimentos.store');
+        Route::put('configuracoes/funcionarios/movimentos/{movimento}', [EmployeeReferenceController::class, 'updateMovementType'])->name('configuracoes.funcionarios.movimentos.update');
+        Route::delete('configuracoes/funcionarios/movimentos/{movimento}', [EmployeeReferenceController::class, 'destroyMovementType'])->name('configuracoes.funcionarios.movimentos.destroy');
     });
 });
 

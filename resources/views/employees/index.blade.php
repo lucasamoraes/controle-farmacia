@@ -48,8 +48,8 @@
             <div class="metric-value">R$ {{ number_format($activeFixedPayrollTotal, 2, ',', '.') }}</div>
         </div>
         <div class="card">
-            <div class="metric-label">Eventos avulsos</div>
-            <div class="metric-value">R$ {{ number_format($activeVariablePayrollTotal, 2, ',', '.') }}</div>
+            <div class="metric-label">Total da folha</div>
+            <div class="metric-value">R$ {{ number_format($monthNetPayrollTotal, 2, ',', '.') }}</div>
         </div>
         <div class="card">
             <div class="metric-label">Aberto no mes</div>

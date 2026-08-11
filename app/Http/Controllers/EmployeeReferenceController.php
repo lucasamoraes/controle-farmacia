@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\EmployeeDepartment;
+use App\Models\EmployeeMovementType;
 use App\Models\EmployeePosition;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,11 @@ class EmployeeReferenceController extends Controller
                 ->get(),
             'departments' => $company->employeeDepartments()
                 ->when($search !== '', fn ($query) => $query->where('name', 'like', "%{$search}%"))
+                ->orderByDesc('is_active')
+                ->orderBy('name')
+                ->get(),
+            'movementTypes' => $this->ensureDefaultMovementTypes($company)
+                ->when($search !== '', fn ($query) => $query->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
                 ->orderByDesc('is_active')
                 ->orderBy('name')
                 ->get(),
@@ -103,6 +109,82 @@ class EmployeeReferenceController extends Controller
         $departamento->update($data + ['is_active' => $request->boolean('is_active', $departamento->is_active)]);
 
         return redirect()->route('configuracoes.funcionarios.index')->with('status', 'Departamento atualizado.');
+    }
+
+    public function storeMovementType(Request $request): RedirectResponse
+    {
+        $data = $this->movementTypeData($request);
+        $data['code'] = $this->movementCode($data['name']);
+        $this->company()->employeeMovementTypes()->create($data);
+
+        return redirect()->route('configuracoes.funcionarios.index')->with('status', 'Tipo de movimento cadastrado.');
+    }
+
+    public function updateMovementType(Request $request, EmployeeMovementType $movimento): RedirectResponse
+    {
+        $company = $this->company();
+        abort_unless($movimento->company_id === $company->id, 404);
+        $data = $this->movementTypeData($request);
+        $data['is_active'] = $request->boolean('is_active', $movimento->is_active);
+        $movimento->update($data);
+
+        return redirect()->route('configuracoes.funcionarios.index')->with('status', 'Tipo de movimento atualizado.');
+    }
+
+    public function destroyMovementType(EmployeeMovementType $movimento): RedirectResponse
+    {
+        $company = $this->company();
+        abort_unless($movimento->company_id === $company->id, 404);
+        $movimento->update(['is_active' => false]);
+
+        return redirect()->route('configuracoes.funcionarios.index')->with('status', 'Tipo de movimento inativado.');
+    }
+
+    private function movementTypeData(Request $request): array
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'kind' => ['required', 'in:credit,debit'],
+            'requires_worked_date' => ['nullable', 'boolean'],
+            'allows_paid_outside' => ['nullable', 'boolean'],
+            'is_taxable' => ['nullable', 'boolean'],
+        ]);
+
+        return $data + [
+            'requires_worked_date' => $request->boolean('requires_worked_date'),
+            'allows_paid_outside' => $request->boolean('allows_paid_outside'),
+            'is_taxable' => $request->boolean('is_taxable'),
+        ];
+    }
+
+    private function ensureDefaultMovementTypes(Company $company)
+    {
+        foreach ($this->defaultMovementTypes() as $type) {
+            $company->employeeMovementTypes()->firstOrCreate(['code' => $type['code']], $type);
+        }
+
+        return $company->employeeMovementTypes();
+    }
+
+    private function defaultMovementTypes(): array
+    {
+        return [
+            ['code' => 'vale', 'name' => 'Vale / adiantamento', 'kind' => 'debit', 'requires_worked_date' => false, 'allows_paid_outside' => false, 'is_taxable' => false, 'is_active' => true],
+            ['code' => 'bonus', 'name' => 'Bonificacao', 'kind' => 'credit', 'requires_worked_date' => false, 'allows_paid_outside' => false, 'is_taxable' => true, 'is_active' => true],
+            ['code' => 'thirteenth', 'name' => '13 salario', 'kind' => 'credit', 'requires_worked_date' => false, 'allows_paid_outside' => false, 'is_taxable' => true, 'is_active' => true],
+            ['code' => 'vacation', 'name' => 'Ferias', 'kind' => 'credit', 'requires_worked_date' => false, 'allows_paid_outside' => false, 'is_taxable' => true, 'is_active' => true],
+            ['code' => 'sunday_work', 'name' => 'Trabalho domingo', 'kind' => 'credit', 'requires_worked_date' => true, 'allows_paid_outside' => true, 'is_taxable' => false, 'is_active' => true],
+            ['code' => 'holiday_work', 'name' => 'Trabalho feriado', 'kind' => 'credit', 'requires_worked_date' => true, 'allows_paid_outside' => true, 'is_taxable' => false, 'is_active' => true],
+            ['code' => 'discount', 'name' => 'Desconto / imposto', 'kind' => 'debit', 'requires_worked_date' => false, 'allows_paid_outside' => false, 'is_taxable' => false, 'is_active' => true],
+            ['code' => 'earning', 'name' => 'Outro acrescimo', 'kind' => 'credit', 'requires_worked_date' => false, 'allows_paid_outside' => false, 'is_taxable' => true, 'is_active' => true],
+        ];
+    }
+
+    private function movementCode(string $name): string
+    {
+        $code = strtolower(trim(preg_replace('/[^a-zA-Z0-9]+/', '_', iconv('UTF-8', 'ASCII//TRANSLIT', $name) ?: $name), '_'));
+
+        return $code ?: 'movimento';
     }
 
     private function company(): Company
