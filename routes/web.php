@@ -129,8 +129,10 @@ Route::middleware('auth')->group(function () {
         Route::delete('configuracoes/cartoes/{cartao}', [CreditCardController::class, 'destroy'])->name('configuracoes.cartoes.destroy');
         Route::get('configuracoes/funcionarios', [EmployeeReferenceController::class, 'index'])->name('configuracoes.funcionarios.index');
         Route::post('configuracoes/funcionarios/cargos', [EmployeeReferenceController::class, 'storePosition'])->name('configuracoes.funcionarios.cargos.store');
+        Route::put('configuracoes/funcionarios/cargos/{cargo}', [EmployeeReferenceController::class, 'updatePosition'])->name('configuracoes.funcionarios.cargos.update');
         Route::delete('configuracoes/funcionarios/cargos/{cargo}', [EmployeeReferenceController::class, 'destroyPosition'])->name('configuracoes.funcionarios.cargos.destroy');
         Route::post('configuracoes/funcionarios/departamentos', [EmployeeReferenceController::class, 'storeDepartment'])->name('configuracoes.funcionarios.departamentos.store');
+        Route::put('configuracoes/funcionarios/departamentos/{departamento}', [EmployeeReferenceController::class, 'updateDepartment'])->name('configuracoes.funcionarios.departamentos.update');
         Route::delete('configuracoes/funcionarios/departamentos/{departamento}', [EmployeeReferenceController::class, 'destroyDepartment'])->name('configuracoes.funcionarios.departamentos.destroy');
     });
 });

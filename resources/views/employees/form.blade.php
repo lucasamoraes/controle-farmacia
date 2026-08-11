@@ -33,7 +33,7 @@
 
         <div class="field-grid">
             <label>Cargo
-                <input name="role" value="{{ old('role', $employee->role) }}" list="positions-list" placeholder="Balconista, caixa, gerente">
+                <input name="role" value="{{ old('role', $employee->role) }}" list="positions-list" placeholder="Balconista, caixa, gerente" data-role-input>
                 <datalist id="positions-list">
                     @foreach ($positions as $position)
                         <option value="{{ $position->name }}" data-cbo="{{ $position->cbo_code }}">{{ $position->name }}{{ $position->cbo_code ? ' - CBO '.$position->cbo_code : '' }}</option>
@@ -42,7 +42,7 @@
                 @error('role') <span class="error">{{ $message }}</span> @enderror
             </label>
             <label>CBO
-                <input name="cbo_code" value="{{ old('cbo_code', $employee->cbo_code) }}" placeholder="Ex: 521130">
+                <input name="cbo_code" value="{{ old('cbo_code', $employee->cbo_code) }}" placeholder="Ex: 521130" data-cbo-input>
                 @error('cbo_code') <span class="error">{{ $message }}</span> @enderror
             </label>
         </div>
@@ -104,4 +104,13 @@
             <a class="btn secondary" href="{{ route('funcionarios.index') }}">Cancelar</a>
         </div>
     </form>
+    <script>
+        const roleInput = document.querySelector('[data-role-input]');
+        const cboInput = document.querySelector('[data-cbo-input]');
+        const positions = @json($positions->map(fn ($position) => ['name' => $position->name, 'cbo' => $position->cbo_code])->values());
+        roleInput?.addEventListener('change', () => {
+            const found = positions.find((position) => position.name === roleInput.value);
+            if (found?.cbo && cboInput && !cboInput.value) cboInput.value = found.cbo;
+        });
+    </script>
 @endsection

@@ -7,9 +7,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EmployeePosition extends Model
 {
-    protected $fillable = ['company_id', 'name', 'cbo_code', 'is_active'];
+    protected $fillable = ['company_id', 'name', 'cbo_code', 'additional_type', 'additional_percent', 'is_active'];
 
-    protected $casts = ['is_active' => 'boolean'];
+    protected $casts = ['additional_percent' => 'decimal:2', 'is_active' => 'boolean'];
 
     public function company(): BelongsTo
     {

@@ -39,6 +39,7 @@ class EmployeeReceiptTest extends TestCase
         $this->actingAs($finance)
             ->post("/funcionarios/{$employee->id}/recibo/eventos", [
                 'reference_month' => '2026-06',
+                'event_type' => 'bonus',
                 'code' => '1',
                 'description' => 'GRATIFICACOES',
                 'reference' => '1.000,00',

@@ -16,8 +16,7 @@ class SummaryController extends Controller
         $company = $this->company();
         $selectedMonth = $this->selectedMonth($request);
         $previousMonth = $selectedMonth->copy()->subMonth();
-        $monthStart = $selectedMonth->copy()->startOfMonth();
-        $monthEnd = $selectedMonth->copy()->endOfMonth();
+        [$monthStart, $monthEnd] = $this->selectedRange($request, $selectedMonth);
         $previousStart = $previousMonth->copy()->startOfMonth();
         $previousEnd = $previousMonth->copy()->endOfMonth();
 
@@ -39,6 +38,8 @@ class SummaryController extends Controller
         return view('summary.index', [
             'company' => $company,
             'selectedMonth' => $selectedMonth,
+            'dateStart' => $monthStart,
+            'dateEnd' => $monthEnd,
             'previousMonth' => $previousMonth,
             'monthlyRevenue' => $monthlyRevenue,
             'previousRevenue' => $previousRevenue,
@@ -65,6 +66,18 @@ class SummaryController extends Controller
         }
 
         return now()->startOfMonth();
+    }
+
+    private function selectedRange(Request $request, Carbon $selectedMonth): array
+    {
+        $start = $request->query('inicio');
+        $end = $request->query('fim');
+
+        if (is_string($start) && is_string($end) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) {
+            return [Carbon::parse($start)->startOfDay(), Carbon::parse($end)->endOfDay()];
+        }
+
+        return [$selectedMonth->copy()->startOfMonth(), $selectedMonth->copy()->endOfMonth()];
     }
 
     private function categoryTotals(Company $company, Carbon $start, Carbon $end, string $search = '')

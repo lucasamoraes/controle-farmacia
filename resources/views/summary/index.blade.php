@@ -17,7 +17,9 @@
         </div>
         <form class="actions" method="get" action="{{ route('resumo.index') }}">
             <input type="month" name="mes" value="{{ $monthInput }}" style="width:160px;">
-            <button class="btn secondary" type="submit">Ver mes</button>
+            <input type="date" name="inicio" value="{{ $dateStart->toDateString() }}" style="width:150px;">
+            <input type="date" name="fim" value="{{ $dateEnd->toDateString() }}" style="width:150px;">
+            <button class="btn secondary" type="submit">Filtrar</button>
             @if ($canWriteFinance)
                 <a class="btn" href="{{ route('faturamento-mensal.create', ['mes' => $monthInput]) }}">Registrar faturamento</a>
             @endif

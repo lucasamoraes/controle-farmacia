@@ -10,6 +10,7 @@ class EmployeePayrollItem extends Model
     protected $fillable = [
         'employee_id',
         'reference_month',
+        'event_type',
         'code',
         'description',
         'reference',

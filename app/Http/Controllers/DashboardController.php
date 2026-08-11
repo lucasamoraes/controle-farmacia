@@ -125,7 +125,6 @@ class DashboardController extends Controller
     private function filteredPayables(Company $company, string $search, string $status, ?string $dateStart, ?string $dateEnd)
     {
         return $company->payables()
-            ->whereNotIn('source', ['employee_fixed', 'employee_variable', 'employee_recurring'])
             ->when($dateStart, fn ($query) => $query->whereDate('due_date', '>=', $dateStart))
             ->when($dateEnd, fn ($query) => $query->whereDate('due_date', '<=', $dateEnd))
             ->when($search !== '', fn ($query) => $this->applyPayableSearch($query, $search))
@@ -207,7 +206,6 @@ class DashboardController extends Controller
     {
         $months = $company->payables()
             ->where('status', '!=', 'cancelled')
-            ->whereNotIn('source', ['employee_fixed', 'employee_variable', 'employee_recurring'])
             ->orderBy('due_date')
             ->get()
             ->groupBy(fn ($payable) => $payable->due_date->format('Y-m'));
@@ -320,7 +318,6 @@ class DashboardController extends Controller
         $expenses = (float) $company->payables()
             ->whereBetween('due_date', [$monthStart, $monthEnd])
             ->where('status', '!=', 'cancelled')
-            ->whereNotIn('source', ['employee_fixed', 'employee_variable', 'employee_recurring'])
             ->sum('amount');
         $stockPurchases = (float) $company->payables()
             ->leftJoin('financial_categories', 'financial_categories.id', '=', 'payables.financial_category_id')

@@ -38,22 +38,12 @@ class EmployeeRecurringExpenseTest extends TestCase
 
         $this->assertDatabaseHas('payables', [
             'company_id' => $company->id,
-            'description' => 'Folha funcionarios fixa - 08/2026',
+            'description' => 'Folha funcionarios - 08/2026',
             'amount' => 2500,
-            'due_date' => '2026-08-05 00:00:00',
+            'due_date' => '2026-09-05 00:00:00',
             'status' => 'open',
-            'source' => 'employee_fixed',
-            'document_number' => 'FUNC-FOLHA-FIXA-2026-08',
-        ]);
-
-        $this->assertDatabaseHas('payables', [
-            'company_id' => $company->id,
-            'description' => 'Folha funcionarios variavel - 08/2026',
-            'amount' => 300,
-            'due_date' => '2026-08-05 00:00:00',
-            'status' => 'open',
-            'source' => 'employee_variable',
-            'document_number' => 'FUNC-FOLHA-VARIAVEL-2026-08',
+            'source' => 'employee_recurring',
+            'document_number' => 'FUNC-FOLHA-2026-08',
         ]);
     }
 
@@ -72,10 +62,10 @@ class EmployeeRecurringExpenseTest extends TestCase
         $this->actingAs($owner)->post('/funcionarios/gerar-despesas', ['mes' => '2026-02']);
         $this->actingAs($owner)->post('/funcionarios/gerar-despesas', ['mes' => '2026-02']);
 
-        $this->assertDatabaseCount('payables', 1);
+        $this->assertDatabaseCount('payables', 12);
         $this->assertDatabaseHas('payables', [
-            'description' => 'Folha funcionarios fixa - 02/2026',
-            'due_date' => '2026-02-28 00:00:00',
+            'description' => 'Folha funcionarios - 02/2026',
+            'due_date' => '2026-03-28 00:00:00',
         ]);
     }
 
@@ -98,7 +88,7 @@ class EmployeeRecurringExpenseTest extends TestCase
             ->assertRedirect('/funcionarios?mes=2026-08');
 
         $this->assertDatabaseHas('payables', [
-            'description' => 'Folha funcionarios fixa - 08/2026',
+            'description' => 'Folha funcionarios - 08/2026',
             'status' => 'paid',
         ]);
     }

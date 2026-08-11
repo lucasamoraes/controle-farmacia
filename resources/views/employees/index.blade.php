@@ -12,7 +12,14 @@
             <p class="subtitle">Cadastro da equipe, recibos mensais, vales e eventos da folha.</p>
         </div>
         @if ($canWriteFinance)
-            <a class="btn" href="{{ route('funcionarios.create') }}">Novo funcionario</a>
+            <div class="actions">
+                <form method="post" action="{{ route('funcionarios.generate-payables') }}">
+                    @csrf
+                    <input type="hidden" name="mes" value="{{ $month }}">
+                    <button class="btn secondary" type="submit">Atualizar previsao</button>
+                </form>
+                <a class="btn" href="{{ route('funcionarios.create') }}">Novo funcionario</a>
+            </div>
         @endif
     </div>
 

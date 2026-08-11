@@ -28,6 +28,8 @@ class EmployeeReferenceController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'cbo_code' => ['nullable', 'string', 'max:20'],
+            'additional_type' => ['nullable', 'in:insalubridade,periculosidade'],
+            'additional_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
 
         $this->company()->employeePositions()->create($data);
@@ -42,6 +44,22 @@ class EmployeeReferenceController extends Controller
         $cargo->update(['is_active' => false]);
 
         return redirect()->route('configuracoes.funcionarios.index')->with('status', 'Cargo inativado.');
+    }
+
+    public function updatePosition(Request $request, EmployeePosition $cargo): RedirectResponse
+    {
+        $company = $this->company();
+        abort_unless($cargo->company_id === $company->id, 404);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'cbo_code' => ['nullable', 'string', 'max:20'],
+            'additional_type' => ['nullable', 'in:insalubridade,periculosidade'],
+            'additional_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+        $cargo->update($data + ['is_active' => $request->boolean('is_active', $cargo->is_active)]);
+
+        return redirect()->route('configuracoes.funcionarios.index')->with('status', 'Cargo atualizado.');
     }
 
     public function storeDepartment(Request $request): RedirectResponse
@@ -62,6 +80,19 @@ class EmployeeReferenceController extends Controller
         $departamento->update(['is_active' => false]);
 
         return redirect()->route('configuracoes.funcionarios.index')->with('status', 'Departamento inativado.');
+    }
+
+    public function updateDepartment(Request $request, EmployeeDepartment $departamento): RedirectResponse
+    {
+        $company = $this->company();
+        abort_unless($departamento->company_id === $company->id, 404);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+        $departamento->update($data + ['is_active' => $request->boolean('is_active', $departamento->is_active)]);
+
+        return redirect()->route('configuracoes.funcionarios.index')->with('status', 'Departamento atualizado.');
     }
 
     private function company(): Company

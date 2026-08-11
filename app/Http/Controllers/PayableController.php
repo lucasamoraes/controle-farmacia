@@ -26,7 +26,6 @@ class PayableController extends Controller
 
         $payablesQuery = $company->payables()
             ->with(['supplier', 'category'])
-            ->whereNotIn('source', ['employee_fixed', 'employee_variable', 'employee_recurring'])
             ->when($search !== '', fn ($query) => $this->applySearch($query, $search))
             ->when(in_array($status, ['open', 'paid', 'cancelled', 'overdue'], true), function ($query) use ($status) {
                 if ($status === 'overdue') {

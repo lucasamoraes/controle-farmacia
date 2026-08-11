@@ -34,19 +34,17 @@
         <tbody>
         @forelse ($cards as $card)
             <tr>
-                <td><strong>{{ $card->name }}</strong></td>
-                <td>{{ $card->closing_day ? 'Dia '.$card->closing_day : '-' }}</td>
-                <td>Dia {{ $card->due_day }}</td>
-                <td><span class="status {{ $card->is_active ? 'paid' : 'cancelled' }}">{{ $card->is_active ? 'Ativo' : 'Inativo' }}</span></td>
-                <td class="actions">
-                    <form method="post" action="{{ route('configuracoes.cartoes.update', $card) }}">
+                <td colspan="5">
+                    <form method="post" action="{{ route('configuracoes.cartoes.update', $card) }}" class="actions">
                         @csrf
                         @method('put')
-                        <input type="hidden" name="name" value="{{ $card->name }}">
-                        <input type="hidden" name="closing_day" value="{{ $card->closing_day }}">
-                        <input type="hidden" name="due_day" value="{{ $card->due_day }}">
-                        <input type="hidden" name="is_active" value="{{ $card->is_active ? 0 : 1 }}">
-                        <button class="btn small secondary" type="submit">{{ $card->is_active ? 'Inativar' : 'Reativar' }}</button>
+                        <input name="name" value="{{ $card->name }}" required style="min-width:180px;">
+                        <input type="number" name="closing_day" min="1" max="31" value="{{ $card->closing_day }}" placeholder="Fechamento" style="max-width:130px;">
+                        <input type="number" name="due_day" min="1" max="31" value="{{ $card->due_day }}" required style="max-width:120px;">
+                        <label style="display:flex; gap:6px; align-items:center; width:auto;">
+                            <input type="checkbox" name="is_active" value="1" @checked($card->is_active) style="width:auto; min-height:auto;"> Ativo
+                        </label>
+                        <button class="btn small secondary" type="submit">Salvar</button>
                     </form>
                     @if ($card->is_active)
                         <form method="post" action="{{ route('configuracoes.cartoes.destroy', $card) }}" data-confirm-title="Inativar cartao" data-confirm-message="Deseja inativar este cartao para novas faturas?" data-confirm-button="Inativar">

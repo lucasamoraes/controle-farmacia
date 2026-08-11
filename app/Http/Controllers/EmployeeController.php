@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class EmployeeController extends Controller
@@ -79,6 +80,7 @@ class EmployeeController extends Controller
     {
         $company = $this->company();
         $company->employees()->create($this->validated($request, $calculator));
+        $this->syncPayrollForecast($company);
 
         return redirect()->route('funcionarios.index')->with('status', 'Funcionario cadastrado.');
     }
@@ -133,6 +135,7 @@ class EmployeeController extends Controller
         abort_unless($funcionario->company_id === $company->id, 404);
 
         $funcionario->update($this->validated($request, $calculator));
+        $this->syncPayrollForecast($company);
 
         return redirect()->route('funcionarios.index')->with('status', 'Funcionario atualizado.');
     }
@@ -167,6 +170,11 @@ class EmployeeController extends Controller
 
         $monthStart = Carbon::createFromFormat('Y-m-d', "{$data['mes']}-01")->startOfMonth();
         $monthEnd = $monthStart->copy()->endOfMonth();
+        $this->syncPayrollForecast($company, $monthStart);
+
+        return redirect()
+            ->route('funcionarios.index', ['mes' => $data['mes']])
+            ->with('status', 'Previsao de folha atualizada para os proximos meses.');
 
         $employees = $company->employees()
             ->where('is_active', true)
@@ -214,7 +222,7 @@ class EmployeeController extends Controller
 
         return redirect()
             ->route('funcionarios.index', ['mes' => $data['mes']])
-            ->with('status', "Folha gerada: {$created} nova(s), {$updated} atualizada(s).");
+            ->with('status', "Previsao de folha atualizada para os proximos meses.");
     }
 
     public function storePayrollItem(Request $request, Employee $funcionario): RedirectResponse
@@ -223,6 +231,7 @@ class EmployeeController extends Controller
         abort_unless($funcionario->company_id === $company->id, 404);
         $data = $request->validate([
             'reference_month' => ['required', 'date_format:Y-m'],
+            'event_type' => ['required', 'in:vale,bonus,thirteenth,vacation,discount,earning'],
             'code' => ['nullable', 'string', 'max:50'],
             'description' => ['required', 'string', 'max:255'],
             'reference' => ['nullable', 'string', 'max:255'],
@@ -230,10 +239,13 @@ class EmployeeController extends Controller
             'deduction' => ['nullable', 'numeric', 'min:0'],
         ]);
         $data['reference_month'] = Carbon::createFromFormat('Y-m-d', $data['reference_month'].'-01')->startOfMonth()->toDateString();
-        $data['earning'] = $data['earning'] ?? 0;
-        $data['deduction'] = $data['deduction'] ?? 0;
+        $isDeduction = in_array($data['event_type'], ['vale', 'discount'], true);
+        $amount = $isDeduction ? (float) ($data['deduction'] ?: $data['earning'] ?: 0) : (float) ($data['earning'] ?: $data['deduction'] ?: 0);
+        $data['earning'] = $isDeduction ? 0 : $amount;
+        $data['deduction'] = $isDeduction ? $amount : 0;
 
         $funcionario->payrollItems()->create($data);
+        $this->syncPayrollForecast($company);
 
         return redirect()->route('funcionarios.recibo', ['funcionario' => $funcionario, 'mes' => Carbon::parse($data['reference_month'])->format('Y-m')])->with('status', 'Evento do recibo cadastrado.');
     }
@@ -265,6 +277,7 @@ class EmployeeController extends Controller
             : Carbon::parse($data['advance_date'])->addMonthNoOverflow()->startOfMonth()->toDateString();
 
         $funcionario->advances()->create($data);
+        $this->syncPayrollForecast($company);
 
         return redirect()->route('funcionarios.recibo', ['funcionario' => $funcionario, 'mes' => Carbon::parse($data['deduct_month'])->format('Y-m')])->with('status', 'Vale cadastrado.');
     }
@@ -293,7 +306,8 @@ class EmployeeController extends Controller
 
         $updated = $company->payables()
             ->where('financial_category_id', $category->id)
-            ->whereBetween('due_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->where('source', 'employee_recurring')
+            ->where('document_number', 'FUNC-FOLHA-'.$monthStart->format('Y-m'))
             ->where('status', 'open')
             ->update([
                 'status' => 'paid',
@@ -336,16 +350,36 @@ class EmployeeController extends Controller
 
     private function automaticPayrollItems(Employee $employee, PayrollCalculator $calculator): array
     {
-        $calculated = $calculator->calculate((float) $employee->base_salary);
+        $position = $employee->company?->employeePositions()
+            ->where('name', $employee->role)
+            ->where('is_active', true)
+            ->first();
+        $baseSalary = $this->employeeBaseSalary($employee);
+        $additionalAmount = $position && $position->additional_type && $position->additional_percent
+            ? round(($baseSalary * (float) $position->additional_percent) / 100, 2)
+            : 0.0;
+        $calculated = $calculator->calculate($baseSalary + $additionalAmount);
         $items = [];
 
-        if ((float) $employee->base_salary > 0) {
+        if ($baseSalary > 0) {
             $items[] = (object) [
                 'id' => null,
                 'code' => '1',
                 'description' => 'SALARIO BASE',
                 'reference' => '220,00',
-                'earning' => (float) $employee->base_salary,
+                'earning' => $baseSalary,
+                'deduction' => 0,
+                'automatic' => true,
+            ];
+        }
+
+        if ($additionalAmount > 0 && $position) {
+            $items[] = (object) [
+                'id' => null,
+                'code' => $position->additional_type === 'periculosidade' ? '30' : '31',
+                'description' => strtoupper($position->additional_type),
+                'reference' => number_format((float) $position->additional_percent, 2, ',', '.').'%',
+                'earning' => $additionalAmount,
                 'deduction' => 0,
                 'automatic' => true,
             ];
@@ -376,6 +410,18 @@ class EmployeeController extends Controller
         }
 
         return $items;
+    }
+
+    private function employeeBaseSalary(Employee $employee): float
+    {
+        foreach (['base_salary', 'fixed_salary', 'salary'] as $field) {
+            $value = (float) $employee->{$field};
+            if ($value > 0) {
+                return $value;
+            }
+        }
+
+        return 0.0;
     }
 
     private function employeeCategory(Company $company): FinancialCategory
@@ -416,6 +462,53 @@ class EmployeeController extends Controller
             'document_number' => $documentNumber,
             'notes' => 'Despesa consolidada da folha de funcionarios.',
         ])];
+    }
+
+    private function syncPayrollForecast(Company $company, ?Carbon $startMonth = null): void
+    {
+        $category = $this->employeeCategory($company);
+        $start = ($startMonth ?: now())->copy()->startOfMonth();
+        $end = $start->copy()->addMonths(11)->startOfMonth();
+
+        for ($month = $start->copy(); $month->lte($end); $month->addMonth()) {
+            $employees = $company->employees()
+                ->where('is_active', true)
+                ->where(function ($query) use ($month) {
+                    $query->whereNull('starts_on')->orWhereDate('starts_on', '<=', $month->copy()->endOfMonth());
+                })
+                ->where(function ($query) use ($month) {
+                    $query->whereNull('ends_on')->orWhereDate('ends_on', '>=', $month);
+                })
+                ->get();
+
+            $baseTotal = (float) $employees->sum(fn ($employee) => $this->employeeBaseSalary($employee));
+            $employeeIds = $employees->pluck('id');
+            $eventTotal = (float) EmployeePayrollItem::query()
+                ->whereIn('employee_id', $employeeIds)
+                ->whereDate('reference_month', $month->toDateString())
+                ->sum(DB::raw('earning - deduction'));
+            $advanceTotal = (float) EmployeeAdvance::query()
+                ->whereIn('employee_id', $employeeIds)
+                ->whereDate('deduct_month', $month->toDateString())
+                ->sum('amount');
+            $amount = max(0, $baseTotal + $eventTotal - $advanceTotal);
+            $paymentDay = (int) min(max((int) ($employees->max('payment_day') ?: 5), 1), 28);
+            $dueDate = $month->copy()->addMonthNoOverflow()->day($paymentDay);
+
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $this->upsertPayrollPayable(
+                $company,
+                $category,
+                'Folha funcionarios - '.$month->format('m/Y'),
+                $amount,
+                $dueDate,
+                'employee_recurring',
+                'FUNC-FOLHA-'.$month->format('Y-m')
+            );
+        }
     }
 
     private function validMonth(mixed $value): ?string

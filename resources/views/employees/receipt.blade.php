@@ -120,15 +120,25 @@
                 <form class="form" method="post" action="{{ route('funcionarios.recibo.eventos.store', $employee) }}" style="margin-top:18px;">
                     @csrf
                     <input type="hidden" name="reference_month" value="{{ $month }}">
-                    <h3 class="panel-title">Adicionar evento avulso</h3>
-                    <p class="subtitle" style="margin-bottom:10px;">Use para premiacao, ferias, 13 salario, desconto manual ou ajuste pontual.</p>
+                    <h3 class="panel-title">Adicionar movimento</h3>
+                    <p class="subtitle" style="margin-bottom:10px;">Use para vale, bonificacao, 13 salario, ferias, desconto ou outro acrescimo.</p>
+                    <label>Tipo
+                        <select name="event_type" required>
+                            <option value="vale">Vale / adiantamento</option>
+                            <option value="bonus">Bonificacao</option>
+                            <option value="thirteenth">13 salario</option>
+                            <option value="vacation">Ferias</option>
+                            <option value="discount">Desconto / imposto</option>
+                            <option value="earning">Outro acrescimo</option>
+                        </select>
+                    </label>
                     <div class="field-grid">
                         <label>Codigo
                             <input name="code" value="{{ old('code') }}" placeholder="Ex: 1">
                             @error('code') <span class="error">{{ $message }}</span> @enderror
                         </label>
                         <label>Descricao
-                            <input name="description" value="{{ old('description') }}" placeholder="Horas normais, INSS, gratificacao" required>
+                            <input name="description" value="{{ old('description') }}" placeholder="Vale, bonificacao, ferias, 13 salario" required>
                             @error('description') <span class="error">{{ $message }}</span> @enderror
                         </label>
                     </div>
@@ -137,11 +147,11 @@
                             <input name="reference" value="{{ old('reference') }}" placeholder="Ex: 220,00">
                             @error('reference') <span class="error">{{ $message }}</span> @enderror
                         </label>
-                        <label>Vencimentos
+                        <label>Valor a acrescentar
                             <input type="number" step="0.01" min="0" name="earning" value="{{ old('earning', 0) }}">
                             @error('earning') <span class="error">{{ $message }}</span> @enderror
                         </label>
-                        <label>Descontos
+                        <label>Valor a descontar
                             <input type="number" step="0.01" min="0" name="deduction" value="{{ old('deduction', 0) }}">
                             @error('deduction') <span class="error">{{ $message }}</span> @enderror
                         </label>
@@ -152,7 +162,7 @@
         </section>
 
         <section>
-            <h2 class="panel-title">Vales descontados nesta folha</h2>
+            <h2 class="panel-title">Vales antigos descontados nesta folha</h2>
             <div class="table-wrap"><table>
                 <thead>
                     <tr><th>Dia</th><th>Descricao</th><th>Forma</th><th>Valor</th><th></th></tr>
@@ -179,39 +189,6 @@
                 @endforelse
                 </tbody>
             </table></div>
-
-            @if ($canWriteFinance)
-                <form class="form" method="post" action="{{ route('funcionarios.vales.store', $employee) }}" style="margin-top:18px;">
-                    @csrf
-                    <h3 class="panel-title">Registrar vale</h3>
-                    <label>Dia do vale
-                        <input type="date" name="advance_date" value="{{ old('advance_date', $month.'-01') }}" required>
-                        @error('advance_date') <span class="error">{{ $message }}</span> @enderror
-                    </label>
-                    <label>Descontar na folha
-                        <input type="month" name="deduct_month" value="{{ old('deduct_month', \Illuminate\Support\Carbon::parse($month.'-01')->addMonthNoOverflow()->format('Y-m')) }}">
-                        @error('deduct_month') <span class="error">{{ $message }}</span> @enderror
-                    </label>
-                    <label>Descricao
-                        <input name="description" value="{{ old('description') }}" placeholder="Vale, adiantamento, ajuda de custo" required>
-                        @error('description') <span class="error">{{ $message }}</span> @enderror
-                    </label>
-                    <div class="field-grid">
-                        <label>Valor
-                            <input type="number" step="0.01" min="0.01" name="amount" value="{{ old('amount') }}" required>
-                            @error('amount') <span class="error">{{ $message }}</span> @enderror
-                        </label>
-                        <label>Forma
-                            <select name="payment_method" required>
-                                <option value="dinheiro" @selected(old('payment_method') === 'dinheiro')>Dinheiro</option>
-                                <option value="pix" @selected(old('payment_method') === 'pix')>Pix</option>
-                            </select>
-                            @error('payment_method') <span class="error">{{ $message }}</span> @enderror
-                        </label>
-                    </div>
-                    <button class="btn" type="submit">Registrar vale</button>
-                </form>
-            @endif
         </section>
     </div>
 
