@@ -27,6 +27,7 @@ class EmployeeController extends Controller
         $monthEnd = $monthStart->copy()->endOfMonth();
         $search = trim((string) $request->query('busca', ''));
         $status = $request->query('status', 'active');
+        $this->syncPayrollForecast($company, $monthStart);
 
         $employees = $company->employees()
             ->when($search !== '', function ($query) use ($search) {
@@ -236,34 +237,7 @@ class EmployeeController extends Controller
     {
         $company = $this->company();
         abort_unless($funcionario->company_id === $company->id, 404);
-        $data = $request->validate([
-            'reference_month' => ['required', 'date_format:Y-m'],
-            'movement_type_id' => ['nullable', 'integer'],
-            'event_type' => ['nullable', 'string', 'max:80'],
-            'worked_date' => ['nullable', 'date'],
-            'paid_outside' => ['nullable', 'boolean'],
-            'code' => ['nullable', 'string', 'max:50'],
-            'description' => ['required', 'string', 'max:255'],
-            'earning' => ['nullable', 'numeric', 'min:0'],
-            'deduction' => ['nullable', 'numeric', 'min:0'],
-        ]);
-        $monthStart = Carbon::createFromFormat('Y-m-d', $data['reference_month'].'-01')->startOfMonth();
-        $type = $this->movementTypeForRequest($company, $data);
-        $data['reference_month'] = $monthStart->toDateString();
-        $data['event_type'] = $type->code;
-        $data['reference'] = null;
-        $data['code'] = ($data['code'] ?? null) ?: $type->code;
-        $isDeduction = $type->kind === 'debit';
-        $amount = $isDeduction ? (float) ($data['deduction'] ?: 0) : (float) ($data['earning'] ?: 0);
-        $data['earning'] = $isDeduction ? 0 : $amount;
-        $data['deduction'] = $isDeduction ? $amount : 0;
-        $data['paid_outside'] = $type->allows_paid_outside && $request->boolean('paid_outside');
-        $data['paid_at'] = $data['paid_outside'] ? now()->toDateString() : null;
-        if (! $type->requires_worked_date) {
-            $data['worked_date'] = null;
-            $data['paid_outside'] = false;
-            $data['paid_at'] = null;
-        }
+        [$data, $monthStart, $amount] = $this->payrollItemData($request, $company);
 
         $item = $funcionario->payrollItems()->create($data);
         if ($item->paid_outside && $amount > 0) {
@@ -272,6 +246,34 @@ class EmployeeController extends Controller
         $this->syncPayrollForecast($company, $monthStart);
 
         return redirect()->route('funcionarios.recibo', ['funcionario' => $funcionario, 'mes' => Carbon::parse($data['reference_month'])->format('Y-m')])->with('status', 'Evento do recibo cadastrado.');
+    }
+
+    public function updatePayrollItem(Request $request, EmployeePayrollItem $item): RedirectResponse
+    {
+        $company = $this->company();
+        abort_unless($item->employee->company_id === $company->id, 404);
+        $employee = $item->employee;
+        $oldMonthStart = $item->reference_month->copy()->startOfMonth();
+        [$data, $monthStart, $amount] = $this->payrollItemData($request, $company);
+        $outsidePayable = $company->payables()
+            ->where('source', 'employee_extra_paid')
+            ->where('document_number', 'FUNC-EXTRA-'.$item->id)
+            ->first();
+
+        $item->update($data);
+
+        if (! $outsidePayable && $item->paid_outside && $amount > 0) {
+            $this->createPaidOutsideWorkPayable($company, $employee, $item->refresh());
+        } elseif ($outsidePayable && $outsidePayable->status === 'open' && (! $item->paid_outside || $amount <= 0)) {
+            $outsidePayable->delete();
+        }
+
+        $this->syncPayrollForecast($company, $oldMonthStart);
+        if (! $oldMonthStart->isSameMonth($monthStart)) {
+            $this->syncPayrollForecast($company, $monthStart);
+        }
+
+        return redirect()->route('funcionarios.recibo', ['funcionario' => $employee, 'mes' => $monthStart->format('Y-m')])->with('status', 'Evento do recibo atualizado.');
     }
 
     public function deletePayrollItem(EmployeePayrollItem $item): RedirectResponse
@@ -521,6 +523,11 @@ class EmployeeController extends Controller
             $dueDate = $month->copy()->addMonthNoOverflow()->day($paymentDay);
 
             if ($amount <= 0) {
+                $company->payables()
+                    ->where('source', 'employee_recurring')
+                    ->where('document_number', 'FUNC-FOLHA-'.$month->format('Y-m'))
+                    ->where('status', 'open')
+                    ->delete();
                 continue;
             }
 
@@ -584,6 +591,41 @@ class EmployeeController extends Controller
             ->sum('amount');
 
         return max(0, $automaticTotal + $eventTotal - $advanceTotal);
+    }
+
+    private function payrollItemData(Request $request, Company $company): array
+    {
+        $data = $request->validate([
+            'reference_month' => ['required', 'date_format:Y-m'],
+            'movement_type_id' => ['nullable', 'integer'],
+            'event_type' => ['nullable', 'string', 'max:80'],
+            'worked_date' => ['nullable', 'date'],
+            'paid_outside' => ['nullable', 'boolean'],
+            'code' => ['nullable', 'string', 'max:50'],
+            'description' => ['required', 'string', 'max:255'],
+            'earning' => ['nullable', 'numeric', 'min:0'],
+            'deduction' => ['nullable', 'numeric', 'min:0'],
+        ]);
+        $monthStart = Carbon::createFromFormat('Y-m-d', $data['reference_month'].'-01')->startOfMonth();
+        $type = $this->movementTypeForRequest($company, $data);
+        $data['reference_month'] = $monthStart->toDateString();
+        $data['event_type'] = $type->code;
+        $data['reference'] = null;
+        $data['code'] = ($data['code'] ?? null) ?: $type->code;
+        $isDeduction = $type->kind === 'debit';
+        $amount = $isDeduction ? (float) ($data['deduction'] ?: 0) : (float) ($data['earning'] ?: 0);
+        $data['earning'] = $isDeduction ? 0 : $amount;
+        $data['deduction'] = $isDeduction ? $amount : 0;
+        $data['paid_outside'] = $type->allows_paid_outside && $request->boolean('paid_outside');
+        $data['paid_at'] = $data['paid_outside'] ? now()->toDateString() : null;
+
+        if (! $type->requires_worked_date) {
+            $data['worked_date'] = null;
+            $data['paid_outside'] = false;
+            $data['paid_at'] = null;
+        }
+
+        return [$data, $monthStart, $amount];
     }
 
     private function movementTypeForRequest(Company $company, array $data): EmployeeMovementType

@@ -109,16 +109,76 @@
                         <td>R$ {{ number_format($item->deduction, 2, ',', '.') }}</td>
                         <td>
                             @if ($canWriteFinance && empty($item->automatic))
-                                <form method="post" action="{{ route('funcionarios.recibo.eventos.destroy', $item) }}" data-confirm-title="Excluir evento" data-confirm-message="Deseja remover este evento do recibo?" data-confirm-button="Excluir" data-confirm-danger="1">
-                                    @csrf
-                                    @method('delete')
-                                    <button class="btn small danger" type="submit">Excluir</button>
-                                </form>
+                                <div class="actions">
+                                    <button class="btn small secondary" type="button" data-edit-toggle="payroll-item-{{ $item->id }}">Editar</button>
+                                    <form method="post" action="{{ route('funcionarios.recibo.eventos.destroy', $item) }}" data-confirm-title="Excluir evento" data-confirm-message="Deseja remover este evento do recibo?" data-confirm-button="Excluir" data-confirm-danger="1">
+                                        @csrf
+                                        @method('delete')
+                                        <button class="btn small danger" type="submit">Excluir</button>
+                                    </form>
+                                </div>
                             @elseif (! empty($item->automatic))
                                 <span class="status open">Automatico</span>
                             @endif
                         </td>
                     </tr>
+                    @if ($canWriteFinance && empty($item->automatic))
+                        @php
+                            $selectedType = $movementTypes->firstWhere('code', $item->event_type) ?? $movementTypes->first();
+                        @endphp
+                        <tr hidden data-edit-field="payroll-item-{{ $item->id }}">
+                            <td colspan="7">
+                                <form class="form" method="post" action="{{ route('funcionarios.recibo.eventos.update', $item) }}" data-movement-form data-confirm-title="Salvar evento" data-confirm-message="Deseja salvar as alteracoes deste evento?" data-confirm-button="Salvar">
+                                    @csrf
+                                    @method('put')
+                                    <input type="hidden" name="reference_month" value="{{ $month }}">
+                                    <label>Tipo
+                                        <select name="movement_type_id" required data-movement-type>
+                                            @foreach ($movementTypes as $type)
+                                                <option value="{{ $type->id }}"
+                                                    data-code="{{ $type->code }}"
+                                                    data-kind="{{ $type->kind }}"
+                                                    data-worked-date="{{ $type->requires_worked_date ? '1' : '0' }}"
+                                                    data-paid-outside="{{ $type->allows_paid_outside ? '1' : '0' }}"
+                                                    @selected($selectedType && $selectedType->id === $type->id)
+                                                >
+                                                    {{ $type->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </label>
+                                    <div class="field-grid" data-work-fields>
+                                        <label>Data trabalhada
+                                            <input type="date" name="worked_date" value="{{ optional($item->worked_date)->format('Y-m-d') }}">
+                                        </label>
+                                        <label style="display:flex; align-items:center; gap:8px; padding-top:24px;">
+                                            <input type="checkbox" name="paid_outside" value="1" style="width:auto; min-height:auto;" @checked($item->paid_outside)>
+                                            Ja foi pago por fora
+                                        </label>
+                                    </div>
+                                    <div class="field-grid">
+                                        <label>Codigo
+                                            <input name="code" value="{{ $item->code }}">
+                                        </label>
+                                        <label>Descricao
+                                            <input name="description" value="{{ $item->description }}" required>
+                                        </label>
+                                    </div>
+                                    <div class="field-grid" style="grid-template-columns:1fr;">
+                                        <label data-credit-field>Valor a acrescentar
+                                            <input type="number" step="0.01" min="0" name="earning" value="{{ $item->earning }}">
+                                        </label>
+                                        <label data-debit-field>Valor a descontar
+                                            <input type="number" step="0.01" min="0" name="deduction" value="{{ $item->deduction }}">
+                                        </label>
+                                    </div>
+                                    <div class="actions">
+                                        <button class="btn" type="submit">Salvar evento</button>
+                                    </div>
+                                </form>
+                            </td>
+                        </tr>
+                    @endif
                 @empty
                     <tr><td colspan="7">Nenhum evento cadastrado para este mes.</td></tr>
                 @endforelse
@@ -126,7 +186,7 @@
             </table></div>
 
             @if ($canWriteFinance)
-                <form class="form" method="post" action="{{ route('funcionarios.recibo.eventos.store', $employee) }}" style="margin-top:18px;">
+                <form class="form" method="post" action="{{ route('funcionarios.recibo.eventos.store', $employee) }}" style="margin-top:18px;" data-movement-form>
                     @csrf
                     <input type="hidden" name="reference_month" value="{{ $month }}">
                     <h3 class="panel-title">Adicionar movimento</h3>
@@ -233,24 +293,26 @@
         </table></div>
     </section>
     <script>
-        const movementSelect = document.querySelector('[data-movement-type]');
-        const workFields = document.querySelector('[data-work-fields]');
-        const creditField = document.querySelector('[data-credit-field]');
-        const debitField = document.querySelector('[data-debit-field]');
-        const earningInput = creditField?.querySelector('input');
-        const deductionInput = debitField?.querySelector('input');
-        const updateMovementFields = () => {
-            const option = movementSelect?.selectedOptions?.[0];
-            if (!option) return;
-            const isDebit = option.dataset.kind === 'debit';
-            const hasWorkDate = option.dataset.workedDate === '1';
-            if (workFields) workFields.hidden = !hasWorkDate;
-            if (creditField) creditField.hidden = isDebit;
-            if (debitField) debitField.hidden = !isDebit;
-            if (isDebit && earningInput) earningInput.value = '0';
-            if (!isDebit && deductionInput) deductionInput.value = '0';
-        };
-        movementSelect?.addEventListener('change', updateMovementFields);
-        updateMovementFields();
+        document.querySelectorAll('[data-movement-form]').forEach((form) => {
+            const movementSelect = form.querySelector('[data-movement-type]');
+            const workFields = form.querySelector('[data-work-fields]');
+            const creditField = form.querySelector('[data-credit-field]');
+            const debitField = form.querySelector('[data-debit-field]');
+            const earningInput = creditField?.querySelector('input');
+            const deductionInput = debitField?.querySelector('input');
+            const updateMovementFields = () => {
+                const option = movementSelect?.selectedOptions?.[0];
+                if (!option) return;
+                const isDebit = option.dataset.kind === 'debit';
+                const hasWorkDate = option.dataset.workedDate === '1';
+                if (workFields) workFields.hidden = !hasWorkDate;
+                if (creditField) creditField.hidden = isDebit;
+                if (debitField) debitField.hidden = !isDebit;
+                if (isDebit && earningInput) earningInput.value = '0';
+                if (!isDebit && deductionInput) deductionInput.value = '0';
+            };
+            movementSelect?.addEventListener('change', updateMovementFields);
+            updateMovementFields();
+        });
     </script>
 @endsection

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\EmployeePayrollItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -137,6 +138,54 @@ class EmployeeReceiptTest extends TestCase
             'amount' => 120,
             'status' => 'paid',
             'source' => 'employee_extra_paid',
+        ]);
+    }
+
+    public function test_payroll_item_update_recalculates_monthly_payroll_payable(): void
+    {
+        [$company, $finance] = $this->companyWithUser('finance');
+        $employee = Employee::create([
+            'company_id' => $company->id,
+            'name' => 'Maria Caixa',
+            'salary' => 2000,
+            'fixed_salary' => 2000,
+            'base_salary' => 2000,
+            'payment_day' => 5,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($finance)->post('/funcionarios/gerar-despesas', ['mes' => '2026-03']);
+
+        $item = EmployeePayrollItem::create([
+            'employee_id' => $employee->id,
+            'reference_month' => '2026-03-01',
+            'event_type' => 'bonus',
+            'description' => 'Bonus',
+            'earning' => 100,
+            'deduction' => 0,
+        ]);
+
+        $this->actingAs($finance)
+            ->put("/funcionarios/recibo/eventos/{$item->id}", [
+                'reference_month' => '2026-03',
+                'event_type' => 'bonus',
+                'description' => 'Bonus ajustado',
+                'earning' => 300,
+                'deduction' => 0,
+            ])
+            ->assertRedirect("/funcionarios/{$employee->id}/recibo?mes=2026-03");
+
+        $this->assertDatabaseHas('employee_payroll_items', [
+            'id' => $item->id,
+            'description' => 'Bonus ajustado',
+            'earning' => 300,
+        ]);
+        $this->assertDatabaseHas('payables', [
+            'company_id' => $company->id,
+            'description' => 'Folha funcionarios - 03/2026',
+            'amount' => 2144.31,
+            'source' => 'employee_recurring',
+            'document_number' => 'FUNC-FOLHA-2026-03',
         ]);
     }
 

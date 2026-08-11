@@ -77,6 +77,7 @@ Route::middleware('auth')->group(function () {
         Route::patch('funcionarios/pagar-folha', [EmployeeController::class, 'markPayrollAsPaid'])->name('funcionarios.mark-payroll-paid');
         Route::get('funcionarios/{funcionario}/recibo', [EmployeeController::class, 'receipt'])->name('funcionarios.recibo');
         Route::post('funcionarios/{funcionario}/recibo/eventos', [EmployeeController::class, 'storePayrollItem'])->name('funcionarios.recibo.eventos.store');
+        Route::put('funcionarios/recibo/eventos/{item}', [EmployeeController::class, 'updatePayrollItem'])->name('funcionarios.recibo.eventos.update');
         Route::delete('funcionarios/recibo/eventos/{item}', [EmployeeController::class, 'deletePayrollItem'])->name('funcionarios.recibo.eventos.destroy');
         Route::post('funcionarios/{funcionario}/vales', [EmployeeController::class, 'storeAdvance'])->name('funcionarios.vales.store');
         Route::delete('funcionarios/vales/{vale}', [EmployeeController::class, 'deleteAdvance'])->name('funcionarios.vales.destroy');
