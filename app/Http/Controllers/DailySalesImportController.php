@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Models\DailySale;
 use App\Services\DailySalesSpreadsheetImporter;
 use Illuminate\Support\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -42,51 +43,14 @@ class DailySalesImportController extends Controller
     public function storeManual(Request $request): RedirectResponse
     {
         $company = $this->company();
-        $data = $request->validate([
-            'sale_date' => ['required', 'date'],
-            'delivery_sales_count' => ['nullable', 'integer', 'min:0'],
-            'delivery_revenue' => ['nullable', 'numeric', 'min:0'],
-            'counter_sales_count' => ['nullable', 'integer', 'min:0'],
-            'counter_revenue' => ['nullable', 'numeric', 'min:0'],
-            'weekday' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $saleDate = Carbon::parse($data['sale_date'])->toDateString();
-        $weekday = trim((string) ($data['weekday'] ?? ''));
-        $weekday = $weekday !== ''
-            ? $weekday
-            : Carbon::parse($saleDate)->locale('pt_BR')->translatedFormat('l');
-        $deliveryRevenue = round((float) ($data['delivery_revenue'] ?? 0), 2);
-        $counterRevenue = round((float) ($data['counter_revenue'] ?? 0), 2);
-        $amount = $deliveryRevenue + $counterRevenue;
-        $deliveryCount = (int) ($data['delivery_sales_count'] ?? 0);
-        $counterCount = (int) ($data['counter_sales_count'] ?? 0);
-
-        if ($amount <= 0) {
-            return back()->withErrors(['amount' => 'Informe pelo menos um valor de venda.'])->withInput();
-        }
+        [$saleDate, $payload] = $this->validatedSaleData($request);
 
         $sale = $company->dailySales()->whereDate('sale_date', $saleDate)->first();
 
         if ($sale) {
-            $sale->update([
-                'amount' => $amount,
-                'delivery_sales_count' => $deliveryCount,
-                'delivery_revenue' => $deliveryRevenue,
-                'counter_sales_count' => $counterCount,
-                'counter_revenue' => $counterRevenue,
-                'weekday' => mb_substr($weekday, 0, 255),
-            ]);
+            $sale->update($payload);
         } else {
-            $sale = $company->dailySales()->create([
-                'sale_date' => $saleDate,
-                'amount' => $amount,
-                'delivery_sales_count' => $deliveryCount,
-                'delivery_revenue' => $deliveryRevenue,
-                'counter_sales_count' => $counterCount,
-                'counter_revenue' => $counterRevenue,
-                'weekday' => mb_substr($weekday, 0, 255),
-            ]);
+            $sale = $company->dailySales()->create($payload);
         }
 
         $this->syncMonthlyRevenue($company, Carbon::parse($saleDate)->format('Y-m'));
@@ -96,6 +60,29 @@ class DailySalesImportController extends Controller
             : 'Essa data ja existia. Valor atualizado e faturamento mensal recalculado.';
 
         return redirect()->route('imports.vendas-diarias.create')->with('status', $message);
+    }
+
+    public function update(Request $request, DailySale $venda): RedirectResponse
+    {
+        $company = $this->company();
+        abort_unless($venda->company_id === $company->id, 404);
+
+        $oldMonth = $venda->sale_date->format('Y-m');
+        [$saleDate, $payload] = $this->validatedSaleData($request);
+        $existingSale = $company->dailySales()
+            ->whereDate('sale_date', $saleDate)
+            ->whereKeyNot($venda->id)
+            ->first();
+
+        if ($existingSale) {
+            return back()->withErrors(['sale_date' => 'Ja existe outro lancamento para essa data. Edite o registro dessa data ou escolha outra.'])->withInput();
+        }
+
+        $venda->update($payload);
+        $this->syncMonthlyRevenue($company, $oldMonth);
+        $this->syncMonthlyRevenue($company, Carbon::parse($saleDate)->format('Y-m'));
+
+        return redirect()->route('imports.vendas-diarias.create')->with('status', 'Venda diaria atualizada e faturamento mensal recalculado.');
     }
 
     public function template(): StreamedResponse
@@ -120,6 +107,41 @@ class DailySalesImportController extends Controller
     private function company(): Company
     {
         return Auth::user()->companies()->firstOrFail();
+    }
+
+    private function validatedSaleData(Request $request): array
+    {
+        $data = $request->validate([
+            'sale_date' => ['required', 'date'],
+            'delivery_sales_count' => ['nullable', 'integer', 'min:0'],
+            'delivery_revenue' => ['nullable', 'numeric', 'min:0'],
+            'counter_sales_count' => ['nullable', 'integer', 'min:0'],
+            'counter_revenue' => ['nullable', 'numeric', 'min:0'],
+            'weekday' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $saleDate = Carbon::parse($data['sale_date'])->toDateString();
+        $weekday = trim((string) ($data['weekday'] ?? ''));
+        $weekday = $weekday !== ''
+            ? $weekday
+            : Carbon::parse($saleDate)->locale('pt_BR')->translatedFormat('l');
+        $deliveryRevenue = round((float) ($data['delivery_revenue'] ?? 0), 2);
+        $counterRevenue = round((float) ($data['counter_revenue'] ?? 0), 2);
+        $amount = $deliveryRevenue + $counterRevenue;
+
+        if ($amount <= 0) {
+            back()->withErrors(['amount' => 'Informe pelo menos um valor de venda.'])->withInput()->throwResponse();
+        }
+
+        return [$saleDate, [
+            'sale_date' => $saleDate,
+            'amount' => $amount,
+            'delivery_sales_count' => (int) ($data['delivery_sales_count'] ?? 0),
+            'delivery_revenue' => $deliveryRevenue,
+            'counter_sales_count' => (int) ($data['counter_sales_count'] ?? 0),
+            'counter_revenue' => $counterRevenue,
+            'weekday' => mb_substr($weekday, 0, 255),
+        ]];
     }
 
     private function syncMonthlyRevenue(Company $company, string $month): void

@@ -80,6 +80,48 @@ class DailySalesManualEntryTest extends TestCase
         ]);
     }
 
+    public function test_finance_user_can_edit_recent_daily_sale_and_resync_months(): void
+    {
+        [$company, $finance] = $this->companyWithUser('finance');
+
+        $this->actingAs($finance)->post('/importar/vendas-diarias/manual', [
+            'sale_date' => '2026-08-31',
+            'delivery_revenue' => 400,
+            'counter_revenue' => 600,
+        ]);
+
+        $sale = $company->dailySales()->firstOrFail();
+
+        $this->actingAs($finance)
+            ->put("/importar/vendas-diarias/{$sale->id}", [
+                'sale_date' => '2026-09-01',
+                'delivery_sales_count' => 3,
+                'delivery_revenue' => 300,
+                'counter_sales_count' => 7,
+                'counter_revenue' => 900,
+            ])
+            ->assertRedirect('/importar/vendas-diarias');
+
+        $this->assertDatabaseHas('daily_sales', [
+            'id' => $sale->id,
+            'sale_date' => '2026-09-01 00:00:00',
+            'amount' => 1200,
+            'delivery_sales_count' => 3,
+            'counter_sales_count' => 7,
+        ]);
+        $this->assertDatabaseHas('monthly_revenues', [
+            'company_id' => $company->id,
+            'reference_month' => '2026-08-01 00:00:00',
+            'gross_revenue' => 0,
+        ]);
+        $this->assertDatabaseHas('monthly_revenues', [
+            'company_id' => $company->id,
+            'reference_month' => '2026-09-01 00:00:00',
+            'gross_revenue' => 1200,
+            'sales_count' => 10,
+        ]);
+    }
+
     public function test_viewer_cannot_register_daily_sale(): void
     {
         [, $viewer] = $this->companyWithUser('viewer');

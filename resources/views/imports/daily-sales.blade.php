@@ -94,7 +94,7 @@
     <section class="card" style="margin-top:22px;">
         <h2 class="panel-title">Ultimos lancamentos</h2>
         <div class="table-wrap"><table>
-            <thead><tr><th>Data</th><th>Dia</th><th>Delivery</th><th>Balcao</th><th>Total</th></tr></thead>
+            <thead><tr><th>Data</th><th>Dia</th><th>Delivery</th><th>Balcao</th><th>Total</th><th></th></tr></thead>
             <tbody>
                 @forelse ($recentSales as $sale)
                     <tr>
@@ -103,9 +103,45 @@
                         <td>{{ number_format((int) $sale->delivery_sales_count, 0, ',', '.') }} venda(s)<br>R$ {{ number_format($sale->delivery_revenue, 2, ',', '.') }}</td>
                         <td>{{ number_format((int) $sale->counter_sales_count, 0, ',', '.') }} venda(s)<br>R$ {{ number_format($sale->counter_revenue, 2, ',', '.') }}</td>
                         <td>R$ {{ number_format($sale->amount, 2, ',', '.') }}</td>
+                        <td><button class="btn small secondary" type="button" data-edit-toggle="daily-sale-{{ $sale->id }}">Editar</button></td>
+                    </tr>
+                    <tr hidden data-edit-field="daily-sale-{{ $sale->id }}">
+                        <td colspan="6">
+                            <form class="form" method="post" action="{{ route('imports.vendas-diarias.update', $sale) }}" data-confirm-title="Salvar venda diaria" data-confirm-message="Deseja salvar as alteracoes deste lancamento? O faturamento mensal sera recalculado." data-confirm-button="Salvar">
+                                @csrf
+                                @method('put')
+                                <div class="field-grid">
+                                    <label>Data
+                                        <input type="date" name="sale_date" value="{{ $sale->sale_date->format('Y-m-d') }}" required>
+                                    </label>
+                                    <label>Dia da semana
+                                        <input name="weekday" value="{{ $sale->weekday }}" placeholder="Opcional, o sistema preenche pela data">
+                                    </label>
+                                </div>
+                                <div class="field-grid">
+                                    <label>Quantidade delivery
+                                        <input type="number" min="0" name="delivery_sales_count" value="{{ (int) $sale->delivery_sales_count }}">
+                                    </label>
+                                    <label>Faturamento delivery
+                                        <input type="number" step="0.01" min="0" name="delivery_revenue" value="{{ $sale->delivery_revenue }}">
+                                    </label>
+                                </div>
+                                <div class="field-grid">
+                                    <label>Quantidade balcao
+                                        <input type="number" min="0" name="counter_sales_count" value="{{ (int) $sale->counter_sales_count }}">
+                                    </label>
+                                    <label>Faturamento balcao
+                                        <input type="number" step="0.01" min="0" name="counter_revenue" value="{{ $sale->counter_revenue }}">
+                                    </label>
+                                </div>
+                                <div class="actions">
+                                    <button class="btn" type="submit">Salvar alteracoes</button>
+                                </div>
+                            </form>
+                        </td>
                     </tr>
                 @empty
-                    <tr><td colspan="5">Nenhuma venda diaria cadastrada.</td></tr>
+                    <tr><td colspan="6">Nenhuma venda diaria cadastrada.</td></tr>
                 @endforelse
             </tbody>
         </table></div>
