@@ -11,6 +11,7 @@ class CreditCardInvoice extends Model
     protected $fillable = [
         'company_id',
         'payable_id',
+        'credit_card_id',
         'card_name',
         'reference_month',
         'due_date',
@@ -35,6 +36,11 @@ class CreditCardInvoice extends Model
     public function payable(): BelongsTo
     {
         return $this->belongsTo(Payable::class);
+    }
+
+    public function creditCard(): BelongsTo
+    {
+        return $this->belongsTo(CreditCard::class);
     }
 
     public function items(): HasMany

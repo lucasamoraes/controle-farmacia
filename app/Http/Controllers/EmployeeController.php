@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\EmployeeAdvance;
+use App\Models\EmployeePayrollItem;
 use App\Models\FinancialCategory;
+use App\Services\PayrollCalculator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -53,9 +56,9 @@ class EmployeeController extends Controller
             'month' => $month,
             'search' => $search,
             'statusFilter' => $status,
-            'activeFixedPayrollTotal' => $company->employees()->where('is_active', true)->sum('fixed_salary'),
-            'activeVariablePayrollTotal' => $company->employees()->where('is_active', true)->sum('variable_salary'),
-            'activePayrollTotal' => $company->employees()->where('is_active', true)->sum('fixed_salary') + $company->employees()->where('is_active', true)->sum('variable_salary'),
+            'activeFixedPayrollTotal' => $company->employees()->where('is_active', true)->sum('base_salary'),
+            'activeVariablePayrollTotal' => 0,
+            'activePayrollTotal' => $company->employees()->where('is_active', true)->sum('base_salary'),
             'monthExpenseTotal' => $monthExpenses->where('status', '!=', 'cancelled')->sum('amount'),
             'monthOpenTotal' => $monthExpenses->where('status', 'open')->sum('amount'),
             'monthPaidTotal' => $monthExpenses->where('status', 'paid')->sum('amount'),
@@ -66,14 +69,16 @@ class EmployeeController extends Controller
     {
         return view('employees.form', [
             'company' => $this->company(),
-            'employee' => new Employee(['payment_day' => 5, 'is_active' => true, 'fixed_salary' => 0, 'variable_salary' => 0]),
+            'employee' => new Employee(['payment_day' => 5, 'is_active' => true, 'base_salary' => 0]),
+            'positions' => $this->company()->employeePositions()->where('is_active', true)->orderBy('name')->get(),
+            'departments' => $this->company()->employeeDepartments()->where('is_active', true)->orderBy('name')->get(),
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, PayrollCalculator $calculator): RedirectResponse
     {
         $company = $this->company();
-        $company->employees()->create($this->validated($request));
+        $company->employees()->create($this->validated($request, $calculator));
 
         return redirect()->route('funcionarios.index')->with('status', 'Funcionario cadastrado.');
     }
@@ -86,15 +91,48 @@ class EmployeeController extends Controller
         return view('employees.form', [
             'company' => $company,
             'employee' => $funcionario,
+            'positions' => $company->employeePositions()->where('is_active', true)->orderBy('name')->get(),
+            'departments' => $company->employeeDepartments()->where('is_active', true)->orderBy('name')->get(),
         ]);
     }
 
-    public function update(Request $request, Employee $funcionario): RedirectResponse
+    public function receipt(Request $request, Employee $funcionario, PayrollCalculator $calculator): View
+    {
+        $company = $this->company();
+        abort_unless($funcionario->company_id === $company->id, 404);
+        $month = $this->validMonth($request->query('mes')) ?? now()->format('Y-m');
+        $monthStart = Carbon::createFromFormat('Y-m-d', "{$month}-01")->startOfMonth();
+        $monthEnd = $monthStart->copy()->endOfMonth();
+        $storedPayrollItems = $funcionario->payrollItems()
+            ->whereDate('reference_month', $monthStart->toDateString())
+            ->orderBy('code')
+            ->orderBy('description')
+            ->get();
+        $automaticItems = collect($this->automaticPayrollItems($funcionario, $calculator));
+        $payrollItems = $automaticItems->concat($storedPayrollItems);
+        $advances = $funcionario->advances()
+            ->whereDate('deduct_month', $monthStart->toDateString())
+            ->orderBy('advance_date')
+            ->get();
+
+        return view('employees.receipt', [
+            'company' => $company,
+            'employee' => $funcionario,
+            'month' => $month,
+            'payrollItems' => $payrollItems,
+            'advances' => $advances,
+            'earningsTotal' => $payrollItems->sum('earning'),
+            'deductionsTotal' => $payrollItems->sum('deduction') + $advances->sum('amount'),
+            'advancesTotal' => $advances->sum('amount'),
+        ]);
+    }
+
+    public function update(Request $request, Employee $funcionario, PayrollCalculator $calculator): RedirectResponse
     {
         $company = $this->company();
         abort_unless($funcionario->company_id === $company->id, 404);
 
-        $funcionario->update($this->validated($request));
+        $funcionario->update($this->validated($request, $calculator));
 
         return redirect()->route('funcionarios.index')->with('status', 'Funcionario atualizado.');
     }
@@ -179,6 +217,69 @@ class EmployeeController extends Controller
             ->with('status', "Folha gerada: {$created} nova(s), {$updated} atualizada(s).");
     }
 
+    public function storePayrollItem(Request $request, Employee $funcionario): RedirectResponse
+    {
+        $company = $this->company();
+        abort_unless($funcionario->company_id === $company->id, 404);
+        $data = $request->validate([
+            'reference_month' => ['required', 'date_format:Y-m'],
+            'code' => ['nullable', 'string', 'max:50'],
+            'description' => ['required', 'string', 'max:255'],
+            'reference' => ['nullable', 'string', 'max:255'],
+            'earning' => ['nullable', 'numeric', 'min:0'],
+            'deduction' => ['nullable', 'numeric', 'min:0'],
+        ]);
+        $data['reference_month'] = Carbon::createFromFormat('Y-m-d', $data['reference_month'].'-01')->startOfMonth()->toDateString();
+        $data['earning'] = $data['earning'] ?? 0;
+        $data['deduction'] = $data['deduction'] ?? 0;
+
+        $funcionario->payrollItems()->create($data);
+
+        return redirect()->route('funcionarios.recibo', ['funcionario' => $funcionario, 'mes' => Carbon::parse($data['reference_month'])->format('Y-m')])->with('status', 'Evento do recibo cadastrado.');
+    }
+
+    public function deletePayrollItem(EmployeePayrollItem $item): RedirectResponse
+    {
+        $company = $this->company();
+        abort_unless($item->employee->company_id === $company->id, 404);
+        $month = $item->reference_month->format('Y-m');
+        $employee = $item->employee;
+        $item->delete();
+
+        return redirect()->route('funcionarios.recibo', ['funcionario' => $employee, 'mes' => $month])->with('status', 'Evento removido.');
+    }
+
+    public function storeAdvance(Request $request, Employee $funcionario): RedirectResponse
+    {
+        $company = $this->company();
+        abort_unless($funcionario->company_id === $company->id, 404);
+        $data = $request->validate([
+            'advance_date' => ['required', 'date'],
+            'deduct_month' => ['nullable', 'date_format:Y-m'],
+            'description' => ['required', 'string', 'max:255'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'payment_method' => ['required', 'in:dinheiro,pix'],
+        ]);
+        $data['deduct_month'] = ! empty($data['deduct_month'])
+            ? Carbon::createFromFormat('Y-m-d', $data['deduct_month'].'-01')->startOfMonth()->toDateString()
+            : Carbon::parse($data['advance_date'])->addMonthNoOverflow()->startOfMonth()->toDateString();
+
+        $funcionario->advances()->create($data);
+
+        return redirect()->route('funcionarios.recibo', ['funcionario' => $funcionario, 'mes' => Carbon::parse($data['deduct_month'])->format('Y-m')])->with('status', 'Vale cadastrado.');
+    }
+
+    public function deleteAdvance(EmployeeAdvance $vale): RedirectResponse
+    {
+        $company = $this->company();
+        abort_unless($vale->employee->company_id === $company->id, 404);
+        $month = ($vale->deduct_month ?: $vale->advance_date)->format('Y-m');
+        $employee = $vale->employee;
+        $vale->delete();
+
+        return redirect()->route('funcionarios.recibo', ['funcionario' => $employee, 'mes' => $month])->with('status', 'Vale removido.');
+    }
+
     public function markPayrollAsPaid(Request $request): RedirectResponse
     {
         $company = $this->company();
@@ -205,14 +306,17 @@ class EmployeeController extends Controller
             ->with('status', "Folha paga: {$updated} despesa(s) marcada(s) como pagas.");
     }
 
-    private function validated(Request $request): array
+    private function validated(Request $request, PayrollCalculator $calculator): array
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'employee_code' => ['nullable', 'string', 'max:255'],
             'document' => ['nullable', 'string', 'max:20'],
             'role' => ['nullable', 'string', 'max:255'],
-            'fixed_salary' => ['required', 'numeric', 'min:0'],
-            'variable_salary' => ['nullable', 'numeric', 'min:0'],
+            'cbo_code' => ['nullable', 'string', 'max:20'],
+            'department' => ['nullable', 'string', 'max:255'],
+            'branch' => ['nullable', 'string', 'max:255'],
+            'base_salary' => ['required', 'numeric', 'min:0'],
             'payment_day' => ['required', 'integer', 'min:1', 'max:31'],
             'starts_on' => ['nullable', 'date'],
             'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
@@ -220,10 +324,58 @@ class EmployeeController extends Controller
         ]);
 
         $data['document'] = $data['document'] ? preg_replace('/\D+/', '', $data['document']) : null;
-        $data['variable_salary'] = $data['variable_salary'] ?? 0;
-        $data['salary'] = (float) $data['fixed_salary'] + (float) $data['variable_salary'];
+        $baseSalary = (float) $data['base_salary'];
+        $calculated = $calculator->calculate($baseSalary);
+        $data = array_merge($data, $calculated);
+        $data['salary'] = $baseSalary;
+        $data['fixed_salary'] = $baseSalary;
+        $data['variable_salary'] = 0;
 
         return $data;
+    }
+
+    private function automaticPayrollItems(Employee $employee, PayrollCalculator $calculator): array
+    {
+        $calculated = $calculator->calculate((float) $employee->base_salary);
+        $items = [];
+
+        if ((float) $employee->base_salary > 0) {
+            $items[] = (object) [
+                'id' => null,
+                'code' => '1',
+                'description' => 'SALARIO BASE',
+                'reference' => '220,00',
+                'earning' => (float) $employee->base_salary,
+                'deduction' => 0,
+                'automatic' => true,
+            ];
+        }
+
+        if ($calculated['inss_discount'] > 0) {
+            $items[] = (object) [
+                'id' => null,
+                'code' => '998',
+                'description' => 'I.N.S.S.',
+                'reference' => number_format($calculated['inss_discount'], 2, ',', '.'),
+                'earning' => 0,
+                'deduction' => $calculated['inss_discount'],
+                'automatic' => true,
+            ];
+        }
+
+        if ($calculated['irrf_discount'] > 0) {
+            $items[] = (object) [
+                'id' => null,
+                'code' => '999',
+                'description' => 'I.R.R.F.',
+                'reference' => number_format($calculated['irrf_bracket'], 2, ',', '.').'%',
+                'earning' => 0,
+                'deduction' => $calculated['irrf_discount'],
+                'automatic' => true,
+            ];
+        }
+
+        return $items;
     }
 
     private function employeeCategory(Company $company): FinancialCategory

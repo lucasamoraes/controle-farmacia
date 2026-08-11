@@ -26,6 +26,7 @@ class PayableController extends Controller
 
         $payablesQuery = $company->payables()
             ->with(['supplier', 'category'])
+            ->whereNotIn('source', ['employee_fixed', 'employee_variable', 'employee_recurring'])
             ->when($search !== '', fn ($query) => $this->applySearch($query, $search))
             ->when(in_array($status, ['open', 'paid', 'cancelled', 'overdue'], true), function ($query) use ($status) {
                 if ($status === 'overdue') {
@@ -68,6 +69,7 @@ class PayableController extends Controller
         $data = $this->validated($request);
         $data['status'] = $data['status'] ?? 'open';
         $data['source'] = 'manual';
+        $data['account_type'] = $data['account_type'] ?? 'boleto';
 
         $company->payables()->create($data);
 
@@ -142,6 +144,7 @@ class PayableController extends Controller
             'due_date' => ['required', 'date'],
             'paid_at' => ['nullable', 'date'],
             'status' => ['nullable', 'in:open,paid,cancelled'],
+            'account_type' => ['nullable', 'in:boleto,credit_card'],
             'document_number' => ['nullable', 'string', 'max:255'],
             'digitable_line' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],

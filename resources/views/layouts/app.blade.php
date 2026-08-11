@@ -191,6 +191,10 @@
                             <div class="nav-subtitle">Cadastros</div>
                             <a href="{{ route('configuracoes.categorias.index') }}" class="{{ request()->routeIs('configuracoes.categorias.*') ? 'active' : '' }}">Categorias</a>
                             @if (auth()->user()->canWriteFinance($company))
+                                <a href="{{ route('configuracoes.cartoes.index') }}" class="{{ request()->routeIs('configuracoes.cartoes.*') ? 'active' : '' }}">Cartoes</a>
+                                <a href="{{ route('configuracoes.funcionarios.index') }}" class="{{ request()->routeIs('configuracoes.funcionarios.*') ? 'active' : '' }}">Funcionarios</a>
+                            @endif
+                            @if (auth()->user()->canWriteFinance($company))
                                 <a href="{{ route('imports.boletos.create') }}" class="{{ request()->routeIs('imports.boletos.*') ? 'active' : '' }}">Importador</a>
                             @endif
                             @if (auth()->user()->canManageUsers($company))

@@ -9,7 +9,7 @@
     <div class="actions" style="justify-content:space-between; align-items:flex-start;">
         <div>
             <h1 class="title">Funcionarios</h1>
-            <p class="subtitle">Cadastro da equipe e geracao recorrente das despesas de salario.</p>
+            <p class="subtitle">Cadastro da equipe, recibos mensais, vales e eventos da folha.</p>
         </div>
         @if ($canWriteFinance)
             <a class="btn" href="{{ route('funcionarios.create') }}">Novo funcionario</a>
@@ -37,11 +37,11 @@
 
     <div class="grid stats">
         <div class="card">
-            <div class="metric-label">Folha fixa ativa</div>
+            <div class="metric-label">Folha base ativa</div>
             <div class="metric-value">R$ {{ number_format($activeFixedPayrollTotal, 2, ',', '.') }}</div>
         </div>
         <div class="card">
-            <div class="metric-label">Variavel previsto</div>
+            <div class="metric-label">Eventos avulsos</div>
             <div class="metric-value">R$ {{ number_format($activeVariablePayrollTotal, 2, ',', '.') }}</div>
         </div>
         <div class="card">
@@ -54,36 +54,17 @@
         </div>
     </div>
 
-    @if ($canWriteFinance)
-        <div class="card">
-            <div class="actions" style="justify-content:space-between; align-items:end;">
-                <form method="post" action="{{ route('funcionarios.generate-payables') }}" data-confirm-title="Gerar folha" data-confirm-message="Deseja gerar a folha consolidada deste mes? Se a folha ainda estiver aberta, o sistema atualiza os valores." data-confirm-button="Gerar folha">
-                    @csrf
-                    <label style="max-width:220px;">Mes
-                        <input type="month" name="mes" value="{{ $month }}" required>
-                    </label>
-                    <button class="btn" type="submit" style="margin-top:10px;">Gerar folha do mes</button>
-                </form>
-                <div style="min-width:220px;">
-                    <h2 class="panel-title" style="margin-bottom:4px;">Folha consolidada</h2>
-                    <p class="subtitle">O fixo e o variavel entram como despesas do mes, sem criar uma conta por funcionario.</p>
-                </div>
-                <form method="post" action="{{ route('funcionarios.mark-payroll-paid') }}" data-confirm-title="Pagar folha" data-confirm-message="Deseja marcar a folha aberta deste mes como paga?" data-confirm-button="Pagar folha">
-                    @csrf
-                    @method('patch')
-                    <input type="hidden" name="mes" value="{{ $month }}">
-                    <button class="btn secondary" type="submit">Pagar folha do mes</button>
-                </form>
-            </div>
-        </div>
-    @endif
+    <div class="alert info">
+        <strong>Folha automatica</strong>
+        O salario base entra automaticamente no recibo de cada mes. Vales, premiacoes, ferias e 13 salario sao registrados no recibo do funcionario quando houver movimentacao.
+    </div>
 
     <div class="grid" style="grid-template-columns:1fr; margin-top:22px;">
         <section>
             <h2 class="panel-title">Equipe</h2>
             <div class="table-wrap"><table>
                 <thead>
-                    <tr><th>Nome</th><th>Cargo</th><th>Fixo</th><th>Variavel</th><th>Pagamento</th><th>Status</th><th></th></tr>
+                    <tr><th>Nome</th><th>Cargo</th><th>Admissao</th><th>Salario base</th><th>Pagamento</th><th>Status</th><th></th></tr>
                 </thead>
                 <tbody>
                 @forelse ($employees as $employee)
@@ -94,13 +75,19 @@
                                 <br><span style="color:var(--muted);">{{ $employee->document }}</span>
                             @endif
                         </td>
-                        <td>{{ $employee->role ?? '-' }}</td>
-                        <td>R$ {{ number_format($employee->fixed_salary, 2, ',', '.') }}</td>
-                        <td>R$ {{ number_format($employee->variable_salary, 2, ',', '.') }}</td>
+                        <td>
+                            {{ $employee->role ?? '-' }}
+                            @if ($employee->cbo_code)
+                                <br><span style="color:var(--muted);">CBO {{ $employee->cbo_code }}</span>
+                            @endif
+                        </td>
+                        <td>{{ optional($employee->starts_on)->format('d/m/Y') ?? '-' }}</td>
+                        <td>R$ {{ number_format($employee->base_salary, 2, ',', '.') }}</td>
                         <td>Dia {{ $employee->payment_day }}</td>
                         <td><span class="status {{ $employee->is_active ? 'paid' : 'cancelled' }}">{{ $employee->is_active ? 'Ativo' : 'Inativo' }}</span></td>
                         <td class="actions">
                             @if ($canWriteFinance)
+                                <a class="btn small secondary" href="{{ route('funcionarios.recibo', ['funcionario' => $employee, 'mes' => $month]) }}">Recibo</a>
                                 <a class="btn small secondary" href="{{ route('funcionarios.edit', $employee) }}">Editar</a>
                                 @if ($employee->is_active)
                                     <form method="post" action="{{ route('funcionarios.destroy', $employee) }}" data-confirm-title="Inativar funcionario" data-confirm-message="Deseja inativar este funcionario? Ele nao entrara nas proximas despesas recorrentes." data-confirm-button="Inativar" data-confirm-danger="1">
@@ -124,34 +111,6 @@
                 </tbody>
             </table></div>
             <div class="pagination">{{ $employees->links() }}</div>
-        </section>
-
-        <section>
-            <h2 class="panel-title">Despesas de funcionarios no mes</h2>
-            <div class="table-wrap"><table>
-                <thead>
-                    <tr><th>Vencimento</th><th>Descricao</th><th>Documento</th><th>Valor</th><th>Status</th><th></th></tr>
-                </thead>
-                <tbody>
-                @forelse ($monthExpenses as $expense)
-                    @php $isOverdue = $expense->status === 'open' && $expense->due_date->isPast() && ! $expense->due_date->isToday(); @endphp
-                    <tr>
-                        <td>{{ $expense->due_date->format('d/m/Y') }}</td>
-                        <td><strong>{{ $expense->description }}</strong></td>
-                        <td>{{ $expense->document_number }}</td>
-                        <td>R$ {{ number_format($expense->amount, 2, ',', '.') }}</td>
-                        <td><span class="status {{ $isOverdue ? 'overdue' : $expense->status }}">{{ $isOverdue ? 'Vencido' : ['open' => 'Aberto', 'paid' => 'Pago', 'cancelled' => 'Cancelado'][$expense->status] ?? ucfirst($expense->status) }}</span></td>
-                        <td>
-                            @if ($canWriteFinance)
-                                <a class="btn small secondary" href="{{ route('contas-a-pagar.edit', $expense) }}">Editar conta</a>
-                            @endif
-                        </td>
-                    </tr>
-                @empty
-                    <tr><td colspan="6">Nenhuma despesa de funcionario para este mes.</td></tr>
-                @endforelse
-                </tbody>
-            </table></div>
         </section>
     </div>
 @endsection

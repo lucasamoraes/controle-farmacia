@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Models\CreditCard;
 use App\Models\CreditCardInvoice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -56,21 +57,24 @@ class CreditCardInvoiceController extends Controller
             $items = $this->validItems($data['items']);
             $total = collect($items)->sum('amount');
             $referenceMonth = Carbon::createFromFormat('Y-m-d', $data['reference_month'].'-01')->startOfMonth()->toDateString();
+            $card = $company->creditCards()->findOrFail($data['credit_card_id']);
 
             $payable = $company->payables()->create([
                 'financial_category_id' => $this->cardCategory($company)->id,
-                'description' => 'Fatura cartao - '.$data['card_name'].' - '.Carbon::parse($referenceMonth)->format('m/Y'),
+                'description' => 'Fatura cartao - '.$card->name.' - '.Carbon::parse($referenceMonth)->format('m/Y'),
                 'amount' => $total,
                 'due_date' => $data['due_date'],
                 'status' => $data['status'],
                 'paid_at' => $data['status'] === 'paid' ? ($data['paid_at'] ?? now()->toDateString()) : null,
                 'source' => 'credit_card_invoice',
+                'account_type' => 'credit_card',
                 'notes' => $data['notes'] ?? null,
             ]);
 
             $invoice = $company->creditCardInvoices()->create([
                 'payable_id' => $payable->id,
-                'card_name' => $data['card_name'],
+                'credit_card_id' => $card->id,
+                'card_name' => $card->name,
                 'reference_month' => $referenceMonth,
                 'due_date' => $data['due_date'],
                 'total_amount' => $total,
@@ -80,6 +84,7 @@ class CreditCardInvoiceController extends Controller
             ]);
 
             $invoice->items()->createMany($items);
+            $this->createRecurringInvoices($company, $card, $referenceMonth, $items, $data);
         });
 
         return redirect()->route('faturas-cartao.index')->with('status', 'Fatura cadastrada.');
@@ -106,9 +111,11 @@ class CreditCardInvoiceController extends Controller
             $total = collect($items)->sum('amount');
             $referenceMonth = Carbon::createFromFormat('Y-m-d', $data['reference_month'].'-01')->startOfMonth()->toDateString();
             $paidAt = $data['status'] === 'paid' ? ($data['paid_at'] ?? now()->toDateString()) : null;
+            $card = $company->creditCards()->findOrFail($data['credit_card_id']);
 
             $faturas_cartao->update([
-                'card_name' => $data['card_name'],
+                'credit_card_id' => $card->id,
+                'card_name' => $card->name,
                 'reference_month' => $referenceMonth,
                 'due_date' => $data['due_date'],
                 'total_amount' => $total,
@@ -123,12 +130,13 @@ class CreditCardInvoiceController extends Controller
             $payable->fill([
                 'company_id' => $company->id,
                 'financial_category_id' => $this->cardCategory($company)->id,
-                'description' => 'Fatura cartao - '.$data['card_name'].' - '.Carbon::parse($referenceMonth)->format('m/Y'),
+                'description' => 'Fatura cartao - '.$card->name.' - '.Carbon::parse($referenceMonth)->format('m/Y'),
                 'amount' => $total,
                 'due_date' => $data['due_date'],
                 'status' => $data['status'],
                 'paid_at' => $paidAt,
                 'source' => 'credit_card_invoice',
+                'account_type' => 'credit_card',
                 'notes' => $data['notes'] ?? null,
             ]);
             $payable->save();
@@ -169,7 +177,7 @@ class CreditCardInvoiceController extends Controller
     private function validated(Request $request): array
     {
         return $request->validate([
-            'card_name' => ['required', 'string', 'max:255'],
+            'credit_card_id' => ['required', 'exists:credit_cards,id'],
             'reference_month' => ['required', 'date_format:Y-m'],
             'due_date' => ['required', 'date'],
             'status' => ['required', 'in:open,paid,cancelled'],
@@ -179,6 +187,9 @@ class CreditCardInvoiceController extends Controller
             'items.*.description' => ['required', 'string', 'max:255'],
             'items.*.financial_category_id' => ['nullable', 'exists:financial_categories,id'],
             'items.*.amount' => ['required', 'numeric', 'min:0.01'],
+            'items.*.is_recurring' => ['nullable', 'boolean'],
+            'items.*.recurrence_start_month' => ['nullable', 'date_format:Y-m'],
+            'items.*.recurrence_end_month' => ['nullable', 'date_format:Y-m'],
         ]);
     }
 
@@ -190,6 +201,9 @@ class CreditCardInvoiceController extends Controller
                 'financial_category_id' => $item['financial_category_id'] ?: null,
                 'description' => trim((string) $item['description']),
                 'amount' => round((float) $item['amount'], 2),
+                'is_recurring' => ! empty($item['is_recurring']),
+                'recurrence_start_month' => ! empty($item['is_recurring']) && ! empty($item['recurrence_start_month']) ? $item['recurrence_start_month'].'-01' : null,
+                'recurrence_end_month' => ! empty($item['is_recurring']) && ! empty($item['recurrence_end_month']) ? $item['recurrence_end_month'].'-01' : null,
             ])
             ->values()
             ->all();
@@ -201,8 +215,87 @@ class CreditCardInvoiceController extends Controller
 
         return [
             'company' => $company,
+            'creditCards' => $company->creditCards()->where('is_active', true)->orderBy('name')->get(),
             'categories' => $company->categories()->where('type', 'expense')->where('is_active', true)->orderBy('name')->get(),
         ];
+    }
+
+    private function createRecurringInvoices(Company $company, CreditCard $card, string $baseReferenceMonth, array $items, array $data): void
+    {
+        $recurringItems = collect($items)->filter(fn ($item) => ! empty($item['is_recurring']) && ! empty($item['recurrence_end_month']));
+        if ($recurringItems->isEmpty()) {
+            return;
+        }
+
+        $baseMonth = Carbon::parse($baseReferenceMonth)->startOfMonth();
+        $dueDay = (int) $card->due_day;
+
+        foreach ($recurringItems as $item) {
+            $start = Carbon::parse($item['recurrence_start_month'] ?: $baseReferenceMonth)->startOfMonth();
+            $end = Carbon::parse($item['recurrence_end_month'])->startOfMonth();
+            if ($end->lt($start)) {
+                continue;
+            }
+
+            for ($month = $start->copy(); $month->lte($end); $month->addMonth()) {
+                if ($month->equalTo($baseMonth)) {
+                    continue;
+                }
+
+                $invoice = $company->creditCardInvoices()
+                    ->firstOrCreate([
+                        'credit_card_id' => $card->id,
+                        'reference_month' => $month->toDateString(),
+                    ], [
+                        'card_name' => $card->name,
+                        'due_date' => $this->dueDateForMonth($month, $dueDay),
+                        'total_amount' => 0,
+                        'status' => 'open',
+                        'notes' => 'Fatura criada automaticamente por recorrencia.',
+                    ]);
+
+                $invoice->items()->firstOrCreate([
+                    'description' => $item['description'],
+                    'financial_category_id' => $item['financial_category_id'],
+                    'amount' => $item['amount'],
+                    'recurrence_start_month' => $item['recurrence_start_month'],
+                    'recurrence_end_month' => $item['recurrence_end_month'],
+                ], [
+                    'is_recurring' => true,
+                ]);
+
+                $this->syncInvoiceTotalAndPayable($company, $invoice->fresh('items'), $card);
+            }
+        }
+    }
+
+    private function syncInvoiceTotalAndPayable(Company $company, CreditCardInvoice $invoice, CreditCard $card): void
+    {
+        $total = (float) $invoice->items()->sum('amount');
+        $invoice->update(['total_amount' => $total]);
+        $payable = $invoice->payable ?: $company->payables()->make(['source' => 'credit_card_invoice']);
+        $payable->fill([
+            'company_id' => $company->id,
+            'financial_category_id' => $this->cardCategory($company)->id,
+            'description' => 'Fatura cartao - '.$card->name.' - '.$invoice->reference_month->format('m/Y'),
+            'amount' => $total,
+            'due_date' => $invoice->due_date,
+            'status' => $invoice->status,
+            'paid_at' => $invoice->paid_at,
+            'source' => 'credit_card_invoice',
+            'account_type' => 'credit_card',
+            'notes' => $invoice->notes,
+        ]);
+        $payable->save();
+
+        if (! $invoice->payable_id) {
+            $invoice->update(['payable_id' => $payable->id]);
+        }
+    }
+
+    private function dueDateForMonth(Carbon $month, int $day): string
+    {
+        return $month->copy()->day(min(max($day, 1), $month->daysInMonth))->toDateString();
     }
 
     private function cardCategory(Company $company)

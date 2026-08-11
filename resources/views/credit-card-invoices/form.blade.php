@@ -6,6 +6,9 @@
             'description' => $item->description,
             'financial_category_id' => $item->financial_category_id,
             'amount' => $item->amount,
+            'is_recurring' => $item->is_recurring,
+            'recurrence_start_month' => optional($item->recurrence_start_month)->format('Y-m'),
+            'recurrence_end_month' => optional($item->recurrence_end_month)->format('Y-m'),
         ])->all() : [['description' => '', 'financial_category_id' => '', 'amount' => '']]);
     @endphp
     <div class="actions" style="justify-content:space-between; align-items:flex-start;">
@@ -24,8 +27,16 @@
 
         <div class="field-grid">
             <label>Cartao
-                <input name="card_name" value="{{ old('card_name', $invoice->card_name) }}" placeholder="Ex: Visa farmacia" required>
-                @error('card_name') <span class="error">{{ $message }}</span> @enderror
+                <select name="credit_card_id" required>
+                    <option value="">Selecione</option>
+                    @foreach ($creditCards as $card)
+                        <option value="{{ $card->id }}" @selected((string) old('credit_card_id', $invoice->credit_card_id) === (string) $card->id)>{{ $card->name }}</option>
+                    @endforeach
+                </select>
+                @error('credit_card_id') <span class="error">{{ $message }}</span> @enderror
+                @if ($creditCards->isEmpty())
+                    <span class="error">Cadastre um cartao em Configuracao > Cartoes antes de lancar faturas.</span>
+                @endif
             </label>
             <label>Mes da fatura
                 <input type="month" name="reference_month" value="{{ old('reference_month', optional($invoice->reference_month)->format('Y-m') ?? now()->format('Y-m')) }}" required>
@@ -61,22 +72,36 @@
             </div>
             <div data-card-items style="display:grid; gap:10px; margin-top:14px;">
                 @foreach ($items as $index => $item)
-                    <div class="field-grid" data-card-item style="grid-template-columns:2fr 1.4fr 1fr auto;">
-                        <label>Descricao
-                            <input name="items[{{ $index }}][description]" value="{{ $item['description'] ?? '' }}" required>
-                        </label>
-                        <label>Categoria
-                            <select name="items[{{ $index }}][financial_category_id]">
-                                <option value="">Sem categoria</option>
-                                @foreach ($categories as $category)
-                                    <option value="{{ $category->id }}" @selected((string) ($item['financial_category_id'] ?? '') === (string) $category->id)>{{ $category->name }}</option>
-                                @endforeach
-                            </select>
-                        </label>
-                        <label>Valor
-                            <input type="number" step="0.01" min="0.01" name="items[{{ $index }}][amount]" value="{{ $item['amount'] ?? '' }}" required data-card-amount>
-                        </label>
-                        <button class="btn small secondary" type="button" data-remove-card-item style="align-self:end;">Remover</button>
+                    <div data-card-item class="card" style="padding:12px;">
+                        <div class="field-grid" style="grid-template-columns:2fr 1.4fr 1fr auto;">
+                            <label>Descricao
+                                <input name="items[{{ $index }}][description]" value="{{ $item['description'] ?? '' }}" required>
+                            </label>
+                            <label>Categoria
+                                <select name="items[{{ $index }}][financial_category_id]">
+                                    <option value="">Sem categoria</option>
+                                    @foreach ($categories as $category)
+                                        <option value="{{ $category->id }}" @selected((string) ($item['financial_category_id'] ?? '') === (string) $category->id)>{{ $category->name }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label>Valor
+                                <input type="number" step="0.01" min="0.01" name="items[{{ $index }}][amount]" value="{{ $item['amount'] ?? '' }}" required data-card-amount>
+                            </label>
+                            <button class="btn small secondary" type="button" data-remove-card-item style="align-self:end;">Remover</button>
+                        </div>
+                        <div class="field-grid" style="grid-template-columns:160px repeat(2, minmax(120px, 1fr)); margin-top:10px;">
+                            <label style="display:flex; align-items:center; gap:8px; padding-top:20px;">
+                                <input type="checkbox" name="items[{{ $index }}][is_recurring]" value="1" @checked(! empty($item['is_recurring'])) style="width:auto; min-height:auto;">
+                                Recorrente
+                            </label>
+                            <label>Inicio
+                                <input type="month" name="items[{{ $index }}][recurrence_start_month]" value="{{ $item['recurrence_start_month'] ?? '' }}">
+                            </label>
+                            <label>Fim
+                                <input type="month" name="items[{{ $index }}][recurrence_end_month]" value="{{ $item['recurrence_end_month'] ?? '' }}">
+                            </label>
+                        </div>
                     </div>
                 @endforeach
             </div>
@@ -96,22 +121,36 @@
     </form>
 
     <template data-card-item-template>
-        <div class="field-grid" data-card-item style="grid-template-columns:2fr 1.4fr 1fr auto;">
-            <label>Descricao
-                <input data-name="description" required>
-            </label>
-            <label>Categoria
-                <select data-name="financial_category_id">
-                    <option value="">Sem categoria</option>
-                    @foreach ($categories as $category)
-                        <option value="{{ $category->id }}">{{ $category->name }}</option>
-                    @endforeach
-                </select>
-            </label>
-            <label>Valor
-                <input type="number" step="0.01" min="0.01" data-name="amount" required data-card-amount>
-            </label>
-            <button class="btn small secondary" type="button" data-remove-card-item style="align-self:end;">Remover</button>
+        <div data-card-item class="card" style="padding:12px;">
+            <div class="field-grid" style="grid-template-columns:2fr 1.4fr 1fr auto;">
+                <label>Descricao
+                    <input data-name="description" required>
+                </label>
+                <label>Categoria
+                    <select data-name="financial_category_id">
+                        <option value="">Sem categoria</option>
+                        @foreach ($categories as $category)
+                            <option value="{{ $category->id }}">{{ $category->name }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label>Valor
+                    <input type="number" step="0.01" min="0.01" data-name="amount" required data-card-amount>
+                </label>
+                <button class="btn small secondary" type="button" data-remove-card-item style="align-self:end;">Remover</button>
+            </div>
+            <div class="field-grid" style="grid-template-columns:160px repeat(2, minmax(120px, 1fr)); margin-top:10px;">
+                <label style="display:flex; align-items:center; gap:8px; padding-top:20px;">
+                    <input type="checkbox" data-name="is_recurring" value="1" style="width:auto; min-height:auto;">
+                    Recorrente
+                </label>
+                <label>Inicio
+                    <input type="month" data-name="recurrence_start_month">
+                </label>
+                <label>Fim
+                    <input type="month" data-name="recurrence_end_month">
+                </label>
+            </div>
         </div>
     </template>
 

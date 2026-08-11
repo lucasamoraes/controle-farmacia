@@ -12,10 +12,16 @@ class CreditCardInvoiceItem extends Model
         'financial_category_id',
         'description',
         'amount',
+        'is_recurring',
+        'recurrence_start_month',
+        'recurrence_end_month',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'is_recurring' => 'boolean',
+        'recurrence_start_month' => 'date',
+        'recurrence_end_month' => 'date',
     ];
 
     public function invoice(): BelongsTo

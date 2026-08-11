@@ -18,6 +18,7 @@ class Payable extends Model
         'paid_at',
         'status',
         'source',
+        'account_type',
         'document_number',
         'barcode',
         'digitable_line',

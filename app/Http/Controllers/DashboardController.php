@@ -49,11 +49,12 @@ class DashboardController extends Controller
             ->leftJoin('suppliers', 'suppliers.id', '=', 'payables.supplier_id')
             ->where('payables.status', '!=', 'cancelled')
             ->where('payables.source', '!=', 'credit_card_invoice')
+            ->whereNotNull('payables.supplier_id')
             ->groupBy('suppliers.id', 'suppliers.name')
             ->orderByDesc(DB::raw('SUM(payables.amount)'))
             ->limit(5)
             ->get([
-                DB::raw("COALESCE(suppliers.name, 'Sem fornecedor') as name"),
+                DB::raw('suppliers.name as name'),
                 DB::raw('SUM(payables.amount) as total'),
             ]);
 
@@ -124,6 +125,7 @@ class DashboardController extends Controller
     private function filteredPayables(Company $company, string $search, string $status, ?string $dateStart, ?string $dateEnd)
     {
         return $company->payables()
+            ->whereNotIn('source', ['employee_fixed', 'employee_variable', 'employee_recurring'])
             ->when($dateStart, fn ($query) => $query->whereDate('due_date', '>=', $dateStart))
             ->when($dateEnd, fn ($query) => $query->whereDate('due_date', '<=', $dateEnd))
             ->when($search !== '', fn ($query) => $this->applyPayableSearch($query, $search))
@@ -205,6 +207,7 @@ class DashboardController extends Controller
     {
         $months = $company->payables()
             ->where('status', '!=', 'cancelled')
+            ->whereNotIn('source', ['employee_fixed', 'employee_variable', 'employee_recurring'])
             ->orderBy('due_date')
             ->get()
             ->groupBy(fn ($payable) => $payable->due_date->format('Y-m'));
@@ -264,46 +267,39 @@ class DashboardController extends Controller
 
     private function employeeDashboard(Company $company, ?string $dateStart, ?string $dateEnd): array
     {
-        $category = $company->categories()
-            ->where('name', 'Funcionarios')
-            ->where('type', 'expense')
-            ->first();
-
         $activeEmployees = $company->employees()->where('is_active', true)->get();
-        $payables = $category
-            ? $company->payables()
-                ->where('financial_category_id', $category->id)
-                ->when($dateStart, fn ($query) => $query->whereDate('due_date', '>=', $dateStart))
-                ->when($dateEnd, fn ($query) => $query->whereDate('due_date', '<=', $dateEnd))
-                ->get()
-            : collect();
+        $monthStart = $dateStart ? Carbon::parse($dateStart)->startOfMonth() : now()->startOfMonth();
+        $monthEnd = $dateEnd ? Carbon::parse($dateEnd)->endOfMonth() : now()->endOfMonth();
+        $baseTotal = (float) $activeEmployees->sum('base_salary');
+        $months = collect();
 
-        $monthly = $payables
-            ->where('status', '!=', 'cancelled')
-            ->groupBy(fn ($payable) => $payable->due_date->format('Y-m'))
-            ->map(function ($rows, $month) {
-                return [
-                    'label' => Carbon::createFromFormat('Y-m-d', $month.'-01')->format('m/Y'),
-                    'fixed' => (float) $rows->whereIn('source', ['employee_fixed', 'employee_recurring'])->sum('amount'),
-                    'variable' => (float) $rows->where('source', 'employee_variable')->sum('amount'),
-                    'total' => (float) $rows->sum('amount'),
-                ];
-            })
-            ->sortBy('label')
-            ->values();
+        for ($month = $monthStart->copy(); $month->lte($monthEnd); $month->addMonth()) {
+            $months->push($month->copy());
+        }
+
+        $monthly = $months->map(fn ($month) => [
+            'label' => $month->format('m/Y'),
+            'fixed' => $baseTotal,
+            'variable' => 0,
+            'total' => $baseTotal,
+        ]);
+
+        $advanceTotal = (float) DB::table('employee_advances')
+            ->join('employees', 'employees.id', '=', 'employee_advances.employee_id')
+            ->where('employees.company_id', $company->id)
+            ->whereBetween('employee_advances.deduct_month', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->sum('employee_advances.amount');
 
         return [
             'activeCount' => $activeEmployees->count(),
             'inactiveCount' => $company->employees()->where('is_active', false)->count(),
-            'fixedTotal' => (float) $activeEmployees->sum('fixed_salary'),
-            'variableTotal' => (float) $activeEmployees->sum('variable_salary'),
-            'openTotal' => (float) $payables->where('status', 'open')->sum('amount'),
-            'paidTotal' => (float) $payables->where('status', 'paid')->sum('amount'),
+            'fixedTotal' => $baseTotal,
+            'variableTotal' => $advanceTotal,
+            'openTotal' => max(0, $baseTotal - $advanceTotal),
+            'paidTotal' => 0,
             'monthly' => $monthly->all(),
-            'topEmployees' => $payables
-                ->where('status', '!=', 'cancelled')
-                ->groupBy(fn ($payable) => preg_replace('/^Salario (fixo|variavel) - /', '', $payable->description))
-                ->map(fn ($rows, $name) => ['name' => $name, 'total' => (float) $rows->sum('amount')])
+            'topEmployees' => $activeEmployees
+                ->map(fn ($employee) => ['name' => $employee->name, 'total' => (float) $employee->base_salary])
                 ->sortByDesc('total')
                 ->take(5)
                 ->values()
@@ -324,6 +320,7 @@ class DashboardController extends Controller
         $expenses = (float) $company->payables()
             ->whereBetween('due_date', [$monthStart, $monthEnd])
             ->where('status', '!=', 'cancelled')
+            ->whereNotIn('source', ['employee_fixed', 'employee_variable', 'employee_recurring'])
             ->sum('amount');
         $stockPurchases = (float) $company->payables()
             ->leftJoin('financial_categories', 'financial_categories.id', '=', 'payables.financial_category_id')

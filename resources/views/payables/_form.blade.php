@@ -14,6 +14,14 @@
         <input type="date" name="due_date" value="{{ old('due_date', isset($payable) ? $payable->due_date->format('Y-m-d') : '') }}" required>
         @error('due_date') <span class="error">{{ $message }}</span> @enderror
     </label>
+    <label>Tipo da conta
+        @php $accountType = old('account_type', $payable->account_type ?? 'boleto'); @endphp
+        <select name="account_type">
+            <option value="boleto" @selected($accountType === 'boleto')>Conta / boleto</option>
+            <option value="credit_card" @selected($accountType === 'credit_card')>Cartao de credito</option>
+        </select>
+        @error('account_type') <span class="error">{{ $message }}</span> @enderror
+    </label>
 </div>
 
 

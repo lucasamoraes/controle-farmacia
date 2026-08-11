@@ -3,10 +3,12 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BoletoUploadController;
 use App\Http\Controllers\CompanyUserController;
+use App\Http\Controllers\CreditCardController;
 use App\Http\Controllers\CreditCardInvoiceController;
 use App\Http\Controllers\DailySalesImportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\EmployeeReferenceController;
 use App\Http\Controllers\FinancialCategoryController;
 use App\Http\Controllers\MonthlyRevenueController;
 use App\Http\Controllers\PayableController;
@@ -73,6 +75,11 @@ Route::middleware('auth')->group(function () {
         Route::post('funcionarios', [EmployeeController::class, 'store'])->name('funcionarios.store');
         Route::post('funcionarios/gerar-despesas', [EmployeeController::class, 'generateMonthlyPayables'])->name('funcionarios.generate-payables');
         Route::patch('funcionarios/pagar-folha', [EmployeeController::class, 'markPayrollAsPaid'])->name('funcionarios.mark-payroll-paid');
+        Route::get('funcionarios/{funcionario}/recibo', [EmployeeController::class, 'receipt'])->name('funcionarios.recibo');
+        Route::post('funcionarios/{funcionario}/recibo/eventos', [EmployeeController::class, 'storePayrollItem'])->name('funcionarios.recibo.eventos.store');
+        Route::delete('funcionarios/recibo/eventos/{item}', [EmployeeController::class, 'deletePayrollItem'])->name('funcionarios.recibo.eventos.destroy');
+        Route::post('funcionarios/{funcionario}/vales', [EmployeeController::class, 'storeAdvance'])->name('funcionarios.vales.store');
+        Route::delete('funcionarios/vales/{vale}', [EmployeeController::class, 'deleteAdvance'])->name('funcionarios.vales.destroy');
         Route::get('funcionarios/{funcionario}/edit', [EmployeeController::class, 'edit'])->name('funcionarios.edit');
         Route::put('funcionarios/{funcionario}', [EmployeeController::class, 'update'])->name('funcionarios.update');
         Route::patch('funcionarios/{funcionario}', [EmployeeController::class, 'update']);
@@ -116,6 +123,15 @@ Route::middleware('auth')->group(function () {
         Route::post('configuracoes/categorias', [FinancialCategoryController::class, 'store'])->name('configuracoes.categorias.store');
         Route::put('configuracoes/categorias/{categoria}', [FinancialCategoryController::class, 'update'])->name('configuracoes.categorias.update');
         Route::delete('configuracoes/categorias/{categoria}', [FinancialCategoryController::class, 'destroy'])->name('configuracoes.categorias.destroy');
+        Route::get('configuracoes/cartoes', [CreditCardController::class, 'index'])->name('configuracoes.cartoes.index');
+        Route::post('configuracoes/cartoes', [CreditCardController::class, 'store'])->name('configuracoes.cartoes.store');
+        Route::put('configuracoes/cartoes/{cartao}', [CreditCardController::class, 'update'])->name('configuracoes.cartoes.update');
+        Route::delete('configuracoes/cartoes/{cartao}', [CreditCardController::class, 'destroy'])->name('configuracoes.cartoes.destroy');
+        Route::get('configuracoes/funcionarios', [EmployeeReferenceController::class, 'index'])->name('configuracoes.funcionarios.index');
+        Route::post('configuracoes/funcionarios/cargos', [EmployeeReferenceController::class, 'storePosition'])->name('configuracoes.funcionarios.cargos.store');
+        Route::delete('configuracoes/funcionarios/cargos/{cargo}', [EmployeeReferenceController::class, 'destroyPosition'])->name('configuracoes.funcionarios.cargos.destroy');
+        Route::post('configuracoes/funcionarios/departamentos', [EmployeeReferenceController::class, 'storeDepartment'])->name('configuracoes.funcionarios.departamentos.store');
+        Route::delete('configuracoes/funcionarios/departamentos/{departamento}', [EmployeeReferenceController::class, 'destroyDepartment'])->name('configuracoes.funcionarios.departamentos.destroy');
     });
 });
 
