@@ -46,12 +46,14 @@
         <tbody>
         @forelse ($cards as $card)
             <tr>
-                <td><strong data-read-row="card-{{ $card->id }}">{{ $card->name }}</strong>
-                    <form id="card-{{ $card->id }}" method="post" action="{{ route('configuracoes.cartoes.update', $card) }}" class="actions" hidden data-edit-form data-confirm-title="Salvar cartao" data-confirm-message="Deseja salvar as alteracoes deste cartao?" data-confirm-button="Salvar">
+                <td>
+                    <strong data-read-row="card-{{ $card->id }}">{{ $card->name }}</strong>
+                    <form id="card-{{ $card->id }}" method="post" action="{{ route('configuracoes.cartoes.update', $card) }}" hidden data-edit-form data-confirm-title="Salvar cartao" data-confirm-message="Deseja salvar as alteracoes deste cartao?" data-confirm-button="Salvar">
                         @csrf
                         @method('put')
-                        <input name="name" value="{{ $card->name }}" required style="min-width:180px;">
-                    </form></td>
+                    </form>
+                    <input name="name" value="{{ $card->name }}" required form="card-{{ $card->id }}" hidden data-edit-field="card-{{ $card->id }}">
+                </td>
                 <td><span data-read-row="card-{{ $card->id }}">{{ $card->closing_day ? 'Dia '.$card->closing_day : '-' }}</span><input type="number" name="closing_day" min="1" max="31" value="{{ $card->closing_day }}" placeholder="Fechamento" form="card-{{ $card->id }}" hidden data-edit-field="card-{{ $card->id }}"></td>
                 <td><span data-read-row="card-{{ $card->id }}">Dia {{ $card->due_day }}</span><input type="number" name="due_day" min="1" max="31" value="{{ $card->due_day }}" required form="card-{{ $card->id }}" hidden data-edit-field="card-{{ $card->id }}"></td>
                 <td><span class="status {{ $card->is_active ? 'paid' : 'cancelled' }}" data-read-row="card-{{ $card->id }}">{{ $card->is_active ? 'Ativo' : 'Inativo' }}</span><select name="is_active" form="card-{{ $card->id }}" hidden data-edit-field="card-{{ $card->id }}"><option value="1" @selected($card->is_active)>Ativo</option><option value="0" @selected(! $card->is_active)>Inativo</option></select></td>

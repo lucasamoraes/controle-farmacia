@@ -6,23 +6,11 @@
             <h1 class="title">Cadastros de funcionarios</h1>
             <p class="subtitle">Padronize cargos, CBO e departamentos usados na folha.</p>
         </div>
-        <div class="actions">
-            <button class="btn secondary" type="button" data-open-panel="new-position">Novo cargo</button>
-            <button class="btn secondary" type="button" data-open-panel="new-department">Novo departamento</button>
-        </div>
     </div>
 
-    <form class="filter-bar" method="get" action="{{ route('configuracoes.funcionarios.index') }}">
-        <div class="filter-grid" style="grid-template-columns:minmax(240px, 1fr) auto;">
-            <label>Buscar cadastro
-                <input type="search" name="busca" value="{{ $search }}" placeholder="Cargo, CBO ou departamento">
-            </label>
-            <button class="btn secondary" type="submit">Buscar</button>
-        </div>
-    </form>
-
-    <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-top:22px;">
-        <form class="form" method="post" action="{{ route('configuracoes.funcionarios.cargos.store') }}" hidden data-panel="new-position" data-confirm-title="Salvar cargo" data-confirm-message="Deseja cadastrar este cargo?" data-confirm-button="Salvar">
+    <details class="card" style="margin-top:22px;">
+        <summary style="cursor:pointer; font-weight:800;">Adicionar novo cargo</summary>
+        <form class="form" method="post" action="{{ route('configuracoes.funcionarios.cargos.store') }}" style="margin-top:14px;" data-confirm-title="Salvar cargo" data-confirm-message="Deseja cadastrar este cargo?" data-confirm-button="Salvar">
             @csrf
             <h2 class="panel-title">Novo cargo</h2>
             <label>Cargo
@@ -45,8 +33,11 @@
             </div>
             <button class="btn" type="submit">Cadastrar cargo</button>
         </form>
+    </details>
 
-        <form class="form" method="post" action="{{ route('configuracoes.funcionarios.departamentos.store') }}" hidden data-panel="new-department" data-confirm-title="Salvar departamento" data-confirm-message="Deseja cadastrar este departamento?" data-confirm-button="Salvar">
+    <details class="card" style="margin-top:12px;">
+        <summary style="cursor:pointer; font-weight:800;">Adicionar novo departamento</summary>
+        <form class="form" method="post" action="{{ route('configuracoes.funcionarios.departamentos.store') }}" style="margin-top:14px;" data-confirm-title="Salvar departamento" data-confirm-message="Deseja cadastrar este departamento?" data-confirm-button="Salvar">
             @csrf
             <h2 class="panel-title">Novo departamento</h2>
             <label>Departamento
@@ -54,7 +45,16 @@
             </label>
             <button class="btn" type="submit">Cadastrar departamento</button>
         </form>
-    </div>
+    </details>
+
+    <form class="filter-bar" method="get" action="{{ route('configuracoes.funcionarios.index') }}">
+        <div class="filter-grid" style="grid-template-columns:minmax(240px, 1fr) auto;">
+            <label>Buscar cadastro
+                <input type="search" name="busca" value="{{ $search }}" placeholder="Cargo, CBO ou departamento">
+            </label>
+            <button class="btn secondary" type="submit">Buscar</button>
+        </div>
+    </form>
 
     <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-top:22px;">
         <section class="card">

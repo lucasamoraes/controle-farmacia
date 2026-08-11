@@ -35,15 +35,32 @@
                     <input type="date" name="sale_date" value="{{ old('sale_date', now()->toDateString()) }}" required>
                     @error('sale_date') <span class="error">{{ $message }}</span> @enderror
                 </label>
-                <label>Valor vendido
-                    <input type="number" step="0.01" min="0.01" name="amount" value="{{ old('amount') }}" required>
-                    @error('amount') <span class="error">{{ $message }}</span> @enderror
+                <label>Dia da semana
+                    <input name="weekday" value="{{ old('weekday') }}" placeholder="Opcional, o sistema preenche pela data">
+                    @error('weekday') <span class="error">{{ $message }}</span> @enderror
                 </label>
             </div>
-            <label>Dia da semana
-                <input name="weekday" value="{{ old('weekday') }}" placeholder="Opcional, o sistema preenche pela data">
-                @error('weekday') <span class="error">{{ $message }}</span> @enderror
-            </label>
+            <div class="field-grid">
+                <label>Quantidade delivery
+                    <input type="number" min="0" name="delivery_sales_count" value="{{ old('delivery_sales_count', 0) }}">
+                    @error('delivery_sales_count') <span class="error">{{ $message }}</span> @enderror
+                </label>
+                <label>Faturamento delivery
+                    <input type="number" step="0.01" min="0" name="delivery_revenue" value="{{ old('delivery_revenue', 0) }}">
+                    @error('delivery_revenue') <span class="error">{{ $message }}</span> @enderror
+                </label>
+            </div>
+            <div class="field-grid">
+                <label>Quantidade balcao
+                    <input type="number" min="0" name="counter_sales_count" value="{{ old('counter_sales_count', 0) }}">
+                    @error('counter_sales_count') <span class="error">{{ $message }}</span> @enderror
+                </label>
+                <label>Faturamento balcao
+                    <input type="number" step="0.01" min="0" name="counter_revenue" value="{{ old('counter_revenue', 0) }}">
+                    @error('counter_revenue') <span class="error">{{ $message }}</span> @enderror
+                </label>
+            </div>
+            @error('amount') <span class="error">{{ $message }}</span> @enderror
             <div class="alert info" style="margin:0;">
                 Se a data ja existir, o valor daquele dia sera atualizado e o faturamento do mes sera recalculado.
             </div>
@@ -77,16 +94,18 @@
     <section class="card" style="margin-top:22px;">
         <h2 class="panel-title">Ultimos lancamentos</h2>
         <div class="table-wrap"><table>
-            <thead><tr><th>Data</th><th>Dia</th><th>Valor</th></tr></thead>
+            <thead><tr><th>Data</th><th>Dia</th><th>Delivery</th><th>Balcao</th><th>Total</th></tr></thead>
             <tbody>
                 @forelse ($recentSales as $sale)
                     <tr>
                         <td>{{ $sale->sale_date->format('d/m/Y') }}</td>
                         <td>{{ $sale->weekday ?: '-' }}</td>
+                        <td>{{ number_format((int) $sale->delivery_sales_count, 0, ',', '.') }} venda(s)<br>R$ {{ number_format($sale->delivery_revenue, 2, ',', '.') }}</td>
+                        <td>{{ number_format((int) $sale->counter_sales_count, 0, ',', '.') }} venda(s)<br>R$ {{ number_format($sale->counter_revenue, 2, ',', '.') }}</td>
                         <td>R$ {{ number_format($sale->amount, 2, ',', '.') }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="3">Nenhuma venda diaria cadastrada.</td></tr>
+                    <tr><td colspan="5">Nenhuma venda diaria cadastrada.</td></tr>
                 @endforelse
             </tbody>
         </table></div>

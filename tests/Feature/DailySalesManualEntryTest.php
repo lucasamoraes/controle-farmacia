@@ -18,7 +18,10 @@ class DailySalesManualEntryTest extends TestCase
         $this->actingAs($finance)
             ->post('/importar/vendas-diarias/manual', [
                 'sale_date' => '2026-08-04',
-                'amount' => 1500.75,
+                'delivery_sales_count' => 5,
+                'delivery_revenue' => 500.25,
+                'counter_sales_count' => 8,
+                'counter_revenue' => 1000.50,
             ])
             ->assertRedirect('/importar/vendas-diarias');
 
@@ -26,12 +29,21 @@ class DailySalesManualEntryTest extends TestCase
             'company_id' => $company->id,
             'sale_date' => '2026-08-04 00:00:00',
             'amount' => 1500.75,
+            'delivery_sales_count' => 5,
+            'delivery_revenue' => 500.25,
+            'counter_sales_count' => 8,
+            'counter_revenue' => 1000.50,
         ]);
 
         $this->assertDatabaseHas('monthly_revenues', [
             'company_id' => $company->id,
             'reference_month' => '2026-08-01 00:00:00',
             'gross_revenue' => 1500.75,
+            'delivery_sales_count' => 5,
+            'delivery_revenue' => 500.25,
+            'counter_sales_count' => 8,
+            'counter_revenue' => 1000.50,
+            'sales_count' => 13,
         ]);
     }
 
@@ -41,15 +53,18 @@ class DailySalesManualEntryTest extends TestCase
 
         $this->actingAs($owner)->post('/importar/vendas-diarias/manual', [
             'sale_date' => '2026-08-04',
-            'amount' => 1000,
+            'delivery_revenue' => 400,
+            'counter_revenue' => 600,
         ]);
         $this->actingAs($owner)->post('/importar/vendas-diarias/manual', [
             'sale_date' => '2026-08-05',
-            'amount' => 500,
+            'delivery_revenue' => 200,
+            'counter_revenue' => 300,
         ]);
         $this->actingAs($owner)->post('/importar/vendas-diarias/manual', [
             'sale_date' => '2026-08-04',
-            'amount' => 1200,
+            'delivery_revenue' => 500,
+            'counter_revenue' => 700,
         ]);
 
         $this->assertDatabaseCount('daily_sales', 2);
@@ -72,7 +87,7 @@ class DailySalesManualEntryTest extends TestCase
         $this->actingAs($viewer)
             ->post('/importar/vendas-diarias/manual', [
                 'sale_date' => '2026-08-04',
-                'amount' => 100,
+                'delivery_revenue' => 100,
             ])
             ->assertForbidden();
     }

@@ -44,7 +44,10 @@ class DailySalesImportController extends Controller
         $company = $this->company();
         $data = $request->validate([
             'sale_date' => ['required', 'date'],
-            'amount' => ['required', 'numeric', 'min:0.01'],
+            'delivery_sales_count' => ['nullable', 'integer', 'min:0'],
+            'delivery_revenue' => ['nullable', 'numeric', 'min:0'],
+            'counter_sales_count' => ['nullable', 'integer', 'min:0'],
+            'counter_revenue' => ['nullable', 'numeric', 'min:0'],
             'weekday' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -53,18 +56,35 @@ class DailySalesImportController extends Controller
         $weekday = $weekday !== ''
             ? $weekday
             : Carbon::parse($saleDate)->locale('pt_BR')->translatedFormat('l');
+        $deliveryRevenue = round((float) ($data['delivery_revenue'] ?? 0), 2);
+        $counterRevenue = round((float) ($data['counter_revenue'] ?? 0), 2);
+        $amount = $deliveryRevenue + $counterRevenue;
+        $deliveryCount = (int) ($data['delivery_sales_count'] ?? 0);
+        $counterCount = (int) ($data['counter_sales_count'] ?? 0);
+
+        if ($amount <= 0) {
+            return back()->withErrors(['amount' => 'Informe pelo menos um valor de venda.'])->withInput();
+        }
 
         $sale = $company->dailySales()->whereDate('sale_date', $saleDate)->first();
 
         if ($sale) {
             $sale->update([
-                'amount' => round((float) $data['amount'], 2),
+                'amount' => $amount,
+                'delivery_sales_count' => $deliveryCount,
+                'delivery_revenue' => $deliveryRevenue,
+                'counter_sales_count' => $counterCount,
+                'counter_revenue' => $counterRevenue,
                 'weekday' => mb_substr($weekday, 0, 255),
             ]);
         } else {
             $sale = $company->dailySales()->create([
                 'sale_date' => $saleDate,
-                'amount' => round((float) $data['amount'], 2),
+                'amount' => $amount,
+                'delivery_sales_count' => $deliveryCount,
+                'delivery_revenue' => $deliveryRevenue,
+                'counter_sales_count' => $counterCount,
+                'counter_revenue' => $counterRevenue,
                 'weekday' => mb_substr($weekday, 0, 255),
             ]);
         }
@@ -113,6 +133,18 @@ class DailySalesImportController extends Controller
         $grossRevenue = (float) $company->dailySales()
             ->whereBetween('sale_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
             ->sum('amount');
+        $deliveryRevenue = (float) $company->dailySales()
+            ->whereBetween('sale_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->sum('delivery_revenue');
+        $counterRevenue = (float) $company->dailySales()
+            ->whereBetween('sale_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->sum('counter_revenue');
+        $deliverySalesCount = (int) $company->dailySales()
+            ->whereBetween('sale_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->sum('delivery_sales_count');
+        $counterSalesCount = (int) $company->dailySales()
+            ->whereBetween('sale_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->sum('counter_sales_count');
 
         $revenue = $company->monthlyRevenues()
             ->whereDate('reference_month', $monthStart->toDateString())
@@ -125,7 +157,12 @@ class DailySalesImportController extends Controller
         }
 
         $revenue->gross_revenue = $grossRevenue;
-        $salesCount = (int) ($revenue->sales_count ?? 0);
+        $revenue->delivery_revenue = $deliveryRevenue;
+        $revenue->counter_revenue = $counterRevenue;
+        $revenue->delivery_sales_count = $deliverySalesCount;
+        $revenue->counter_sales_count = $counterSalesCount;
+        $revenue->sales_count = $deliverySalesCount + $counterSalesCount;
+        $salesCount = (int) $revenue->sales_count;
         $revenue->average_ticket = $salesCount > 0 ? round($grossRevenue / $salesCount, 2) : 0;
         $revenue->save();
     }
