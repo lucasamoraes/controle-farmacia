@@ -11,13 +11,19 @@ use Illuminate\View\View;
 
 class CreditCardController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
         $company = $this->company();
+        $search = trim((string) $request->query('busca', ''));
 
         return view('credit-cards.index', [
             'company' => $company,
-            'cards' => $company->creditCards()->orderByDesc('is_active')->orderBy('name')->get(),
+            'cards' => $company->creditCards()
+                ->when($search !== '', fn ($query) => $query->where('name', 'like', "%{$search}%"))
+                ->orderByDesc('is_active')
+                ->orderBy('name')
+                ->get(),
+            'search' => $search,
         ]);
     }
 

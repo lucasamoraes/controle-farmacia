@@ -12,14 +12,24 @@ use Illuminate\View\View;
 
 class EmployeeReferenceController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
         $company = $this->company();
+        $search = trim((string) $request->query('busca', ''));
 
         return view('employee-references.index', [
             'company' => $company,
-            'positions' => $company->employeePositions()->orderByDesc('is_active')->orderBy('name')->get(),
-            'departments' => $company->employeeDepartments()->orderByDesc('is_active')->orderBy('name')->get(),
+            'positions' => $company->employeePositions()
+                ->when($search !== '', fn ($query) => $query->where('name', 'like', "%{$search}%")->orWhere('cbo_code', 'like', "%{$search}%"))
+                ->orderByDesc('is_active')
+                ->orderBy('name')
+                ->get(),
+            'departments' => $company->employeeDepartments()
+                ->when($search !== '', fn ($query) => $query->where('name', 'like', "%{$search}%"))
+                ->orderByDesc('is_active')
+                ->orderBy('name')
+                ->get(),
+            'search' => $search,
         ]);
     }
 

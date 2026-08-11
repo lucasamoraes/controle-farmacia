@@ -9,7 +9,7 @@
         <a class="btn secondary" href="{{ route('funcionarios.index') }}">Voltar</a>
     </div>
 
-    <form class="form" method="post" action="{{ $employee->exists ? route('funcionarios.update', $employee) : route('funcionarios.store') }}" style="margin-top:22px;">
+    <form class="form" method="post" action="{{ $employee->exists ? route('funcionarios.update', $employee) : route('funcionarios.store') }}" style="margin-top:22px;" data-confirm-title="Salvar funcionario" data-confirm-message="Deseja salvar este funcionario?" data-confirm-button="Salvar">
         @csrf
         @if ($employee->exists)
             @method('put')
@@ -33,29 +33,35 @@
 
         <div class="field-grid">
             <label>Cargo
-                <input name="role" value="{{ old('role', $employee->role) }}" list="positions-list" placeholder="Balconista, caixa, gerente" data-role-input>
-                <datalist id="positions-list">
+                <select name="role" required data-role-input>
+                    <option value="">Selecione</option>
                     @foreach ($positions as $position)
-                        <option value="{{ $position->name }}" data-cbo="{{ $position->cbo_code }}">{{ $position->name }}{{ $position->cbo_code ? ' - CBO '.$position->cbo_code : '' }}</option>
+                        <option value="{{ $position->name }}" data-cbo="{{ $position->cbo_code }}" @selected(old('role', $employee->role) === $position->name)>{{ $position->name }}</option>
                     @endforeach
-                </datalist>
+                </select>
                 @error('role') <span class="error">{{ $message }}</span> @enderror
+                @if ($positions->isEmpty())
+                    <span class="error">Cadastre cargos em Configuracao > Funcionarios antes de cadastrar a equipe.</span>
+                @endif
             </label>
             <label>CBO
-                <input name="cbo_code" value="{{ old('cbo_code', $employee->cbo_code) }}" placeholder="Ex: 521130" data-cbo-input>
+                <input name="cbo_code" value="{{ old('cbo_code', $employee->cbo_code) }}" placeholder="Ex: 521130" data-cbo-input readonly>
                 @error('cbo_code') <span class="error">{{ $message }}</span> @enderror
             </label>
         </div>
 
         <div class="field-grid">
             <label>Departamento
-                <input name="department" value="{{ old('department', $employee->department) }}" list="departments-list" placeholder="Balcao, administrativo">
-                <datalist id="departments-list">
+                <select name="department" required>
+                    <option value="">Selecione</option>
                     @foreach ($departments as $department)
-                        <option value="{{ $department->name }}">{{ $department->name }}</option>
+                        <option value="{{ $department->name }}" @selected(old('department', $employee->department) === $department->name)>{{ $department->name }}</option>
                     @endforeach
-                </datalist>
+                </select>
                 @error('department') <span class="error">{{ $message }}</span> @enderror
+                @if ($departments->isEmpty())
+                    <span class="error">Cadastre departamentos em Configuracao > Funcionarios.</span>
+                @endif
             </label>
             <label>Filial
                 <input name="branch" value="{{ old('branch', $employee->branch) }}" placeholder="Ex: 1">
@@ -108,9 +114,11 @@
         const roleInput = document.querySelector('[data-role-input]');
         const cboInput = document.querySelector('[data-cbo-input]');
         const positions = @json($positions->map(fn ($position) => ['name' => $position->name, 'cbo' => $position->cbo_code])->values());
-        roleInput?.addEventListener('change', () => {
-            const found = positions.find((position) => position.name === roleInput.value);
-            if (found?.cbo && cboInput && !cboInput.value) cboInput.value = found.cbo;
-        });
+        const syncCbo = () => {
+            const found = positions.find((position) => position.name === roleInput?.value);
+            if (cboInput) cboInput.value = found?.cbo || '';
+        };
+        roleInput?.addEventListener('change', syncCbo);
+        if (roleInput?.value && !cboInput?.value) syncCbo();
     </script>
 @endsection

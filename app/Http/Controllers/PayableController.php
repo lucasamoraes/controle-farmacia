@@ -17,8 +17,8 @@ class PayableController extends Controller
         $company = $this->company();
         [$dateStart, $dateEnd] = $this->dateRange($request);
         $search = trim((string) $request->query('busca', ''));
-        $status = $request->query('status', 'open');
-        $period = $request->query('periodo', 'month');
+        $status = $request->query('status', '');
+        $period = $request->query('periodo', '');
 
         if (($dateStart || $dateEnd) && ($request->query('periodo') === null || $period === 'custom')) {
             $period = 'custom';
@@ -194,7 +194,7 @@ class PayableController extends Controller
             '30' => [$today->copy()->subDays(29)->toDateString(), $today->toDateString()],
             'month' => [$today->copy()->startOfMonth()->toDateString(), $today->copy()->endOfMonth()->toDateString()],
             'next7' => [$today->toDateString(), $today->copy()->addDays(7)->toDateString()],
-            default => [$today->copy()->startOfMonth()->toDateString(), $today->copy()->endOfMonth()->toDateString()],
+            default => [null, null],
         };
     }
 

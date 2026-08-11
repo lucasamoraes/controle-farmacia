@@ -39,7 +39,7 @@
             </label>
             <label>Periodo
                 <select name="periodo">
-                    <option value="" @selected($period === '')>Todos</option>
+                    <option value="" @selected($period === '')>Todo periodo</option>
                     <option value="next7" @selected($period === 'next7')>Proximos 7 dias</option>
                     <option value="7" @selected($period === '7')>Ultimos 7 dias</option>
                     <option value="30" @selected($period === '30')>Ultimos 30 dias</option>

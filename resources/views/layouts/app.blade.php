@@ -368,6 +368,25 @@
         confirmCancel?.addEventListener('click', closeConfirm);
         confirmBackdrop?.addEventListener('click', closeConfirm);
 
+        document.querySelectorAll('[data-edit-toggle]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const key = button.dataset.editToggle;
+                document.querySelectorAll(`[data-read-row="${key}"]`).forEach((item) => item.hidden = true);
+                document.querySelectorAll(`[data-edit-field="${key}"]`).forEach((item) => item.hidden = false);
+                const form = document.getElementById(key);
+                if (form) form.hidden = false;
+                const save = document.querySelector(`[data-save-button="${key}"]`);
+                if (save) save.hidden = false;
+                button.hidden = true;
+            });
+        });
+        document.querySelectorAll('[data-open-panel]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const panel = document.querySelector(`[data-panel="${button.dataset.openPanel}"]`);
+                if (panel) panel.hidden = !panel.hidden;
+            });
+        });
+
         const dailyAlertDialog = document.querySelector('[data-daily-alert-dialog]');
         const dailyAlertBackdrop = document.querySelector('[data-daily-alert-backdrop]');
         const dailyAlertClose = document.querySelector('[data-daily-alert-close]');
