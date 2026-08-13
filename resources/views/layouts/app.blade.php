@@ -16,6 +16,13 @@
         html { max-width:100%; overflow-x:hidden; }
         body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--ink); font-size:14px; max-width:100%; overflow-x:hidden; }
         body.nav-open { overflow:hidden; }
+        body.sidebar-collapsed .app { grid-template-columns:74px minmax(0,1fr); }
+        body.sidebar-collapsed .sidebar { padding:18px 10px; }
+        body.sidebar-collapsed .brand span, body.sidebar-collapsed .nav-items, body.sidebar-collapsed .sidebar-footer { display:none; }
+        body.sidebar-collapsed .brand { font-size:13px; text-align:center; }
+        body.sidebar-collapsed .nav-group summary { justify-content:center; padding:11px 8px; font-size:0; }
+        body.sidebar-collapsed .nav-group summary::after { content:'+'; font-size:15px; }
+        body.sidebar-collapsed .nav-group[open] summary::after { content:'-'; }
         a { color:inherit; text-decoration:none; }
         .app { min-height:100vh; display:grid; grid-template-columns:240px minmax(0,1fr); }
         .sidebar { background:var(--sidebar); color:#eef6ff; padding:22px 18px; display:flex; flex-direction:column; gap:22px; min-height:100vh; position:sticky; top:0; }
@@ -37,6 +44,7 @@
         .topbar { min-height:64px; background:var(--panel); border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; padding:0 28px; gap:14px; position:sticky; top:0; z-index:20; }
         .topbar-left, .topbar-actions { display:flex; align-items:center; gap:12px; min-width:0; }
         .menu-toggle { display:none; border:1px solid var(--line); background:#fff; color:var(--ink); width:40px; height:40px; border-radius:6px; font-size:22px; line-height:1; cursor:pointer; }
+        .sidebar-toggle { border:1px solid var(--line); background:#fff; color:var(--ink); width:40px; height:40px; border-radius:6px; font-size:18px; cursor:pointer; }
         .install-btn { display:none; }
         .content { padding:28px; max-width:1180px; overflow:hidden; }
         .title { margin:0 0 4px; font-size:24px; }
@@ -101,6 +109,9 @@
         .modal { position:fixed; inset:0; z-index:90; display:grid; place-items:center; padding:18px; }
         .modal[hidden], .modal-backdrop[hidden] { display:none; }
         .modal-panel { width:min(560px, 100%); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:20px; box-shadow:0 24px 70px rgba(15,23,42,.24); }
+        th[data-sort-table] { cursor:pointer; user-select:none; }
+        th[data-sort-table]::after { content:' sort'; color:#94a3b8; font-size:10px; text-transform:none; }
+        .chart-box { position:relative; height:320px; width:100%; }
         .mobile-backdrop { display:none; }
         @media (max-width: 980px) { .stats { grid-template-columns:repeat(2, minmax(0,1fr)); } .content { padding:22px; } }
         @media (max-width: 760px) {
@@ -110,6 +121,12 @@
             .mobile-backdrop { display:none; position:fixed; inset:0; background:rgba(15,23,42,.38); z-index:40; border:0; }
             body.nav-open .mobile-backdrop { display:block; }
             .menu-toggle { display:inline-flex; align-items:center; justify-content:center; }
+            .sidebar-toggle { display:none; }
+            body.sidebar-collapsed .app { display:block; }
+            body.sidebar-collapsed .sidebar { padding:22px 18px; }
+            body.sidebar-collapsed .brand span, body.sidebar-collapsed .nav-items, body.sidebar-collapsed .sidebar-footer { display:block; }
+            body.sidebar-collapsed .brand { font-size:18px; text-align:left; }
+            body.sidebar-collapsed .nav-group summary { justify-content:space-between; padding:11px 12px; font-size:14px; }
             .topbar { padding:10px 12px; align-items:center; gap:8px; }
             .topbar-left { flex:1 1 auto; }
             .topbar-actions { margin-left:auto; gap:8px; }
@@ -209,6 +226,7 @@
                 <header class="topbar">
                     <div class="topbar-left">
                         <button class="menu-toggle" type="button" data-menu-toggle aria-controls="app-sidebar" aria-expanded="false">=</button>
+                        <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Recolher menu">=</button>
                         <div>
                             <strong>{{ $pageTitle ?? 'Financeiro' }}</strong>
                             <div style="color:var(--muted); font-size:12px; margin-top:3px;">{{ now()->format('d/m/Y') }}</div>
@@ -271,6 +289,39 @@
             body.classList.remove('nav-open');
             menuButton?.setAttribute('aria-expanded', 'false');
         }));
+        const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
+        if (localStorage.getItem('sidebar-collapsed') === '1') {
+            body.classList.add('sidebar-collapsed');
+        }
+        sidebarToggle?.addEventListener('click', () => {
+            const collapsed = body.classList.toggle('sidebar-collapsed');
+            localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0');
+        });
+
+        document.querySelectorAll('table').forEach((table) => {
+            table.querySelectorAll('thead th').forEach((th, index) => {
+                if (th.querySelector('input, select, button, a')) return;
+                th.dataset.sortTable = '1';
+                th.addEventListener('click', () => {
+                    const tbody = table.tBodies[0];
+                    if (!tbody) return;
+                    const rows = [...tbody.rows].filter((row) => row.cells.length === table.tHead.rows[0].cells.length);
+                    const direction = th.dataset.sortDirection === 'asc' ? 'desc' : 'asc';
+                    th.dataset.sortDirection = direction;
+                    rows.sort((a, b) => {
+                        const left = a.cells[index]?.innerText.trim() || '';
+                        const right = b.cells[index]?.innerText.trim() || '';
+                        const leftNumber = Number(left.replace(/[^\d,-]/g, '').replace(',', '.'));
+                        const rightNumber = Number(right.replace(/[^\d,-]/g, '').replace(',', '.'));
+                        const result = Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && left !== '' && right !== ''
+                            ? leftNumber - rightNumber
+                            : left.localeCompare(right, 'pt-BR', { numeric: true });
+                        return direction === 'asc' ? result : -result;
+                    });
+                    rows.forEach((row) => tbody.appendChild(row));
+                });
+            });
+        });
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js').catch(() => {}));

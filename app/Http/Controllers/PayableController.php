@@ -18,7 +18,8 @@ class PayableController extends Controller
         [$dateStart, $dateEnd] = $this->dateRange($request);
         $search = trim((string) $request->query('busca', ''));
         $status = $request->query('status', '');
-        $period = $request->query('periodo', '');
+        $period = $request->query('periodo', 'next7');
+        $categoryId = $request->query('categoria');
 
         if (($dateStart || $dateEnd) && ($request->query('periodo') === null || $period === 'custom')) {
             $period = 'custom';
@@ -27,6 +28,7 @@ class PayableController extends Controller
         $payablesQuery = $company->payables()
             ->with(['supplier', 'category'])
             ->when($search !== '', fn ($query) => $this->applySearch($query, $search))
+            ->when($categoryId !== null && $categoryId !== '', fn ($query) => $query->where('financial_category_id', $categoryId))
             ->when(in_array($status, ['open', 'paid', 'cancelled', 'overdue'], true), function ($query) use ($status) {
                 if ($status === 'overdue') {
                     $query->where('status', 'open')->whereDate('due_date', '<', Carbon::today());
@@ -53,6 +55,8 @@ class PayableController extends Controller
             'period' => $period,
             'dateStart' => $dateStart,
             'dateEnd' => $dateEnd,
+            'categoryFilter' => $categoryId,
+            'categories' => $company->categories()->where('type', 'expense')->orderBy('name')->get(),
             'filteredTotal' => $filteredTotal,
         ]);
     }
@@ -70,9 +74,14 @@ class PayableController extends Controller
         $data['source'] = 'manual';
         $data['account_type'] = $data['account_type'] ?? 'boleto';
 
-        $company->payables()->create($data);
+        $created = $this->createPayablesWithRecurrence(
+            $company,
+            $data,
+            $request->boolean('is_recurring'),
+            $request->input('recurrence_end_month')
+        );
 
-        return redirect()->route('contas-a-pagar.index')->with('status', 'Conta a pagar criada.');
+        return redirect()->route('contas-a-pagar.index')->with('status', $created > 1 ? "{$created} contas recorrentes criadas." : 'Conta a pagar criada.');
     }
 
     public function edit(Payable $contas_a_pagar): View
@@ -147,7 +156,35 @@ class PayableController extends Controller
             'document_number' => ['nullable', 'string', 'max:255'],
             'digitable_line' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
+            'is_recurring' => ['nullable', 'boolean'],
+            'recurrence_end_month' => ['nullable', 'date_format:Y-m'],
         ]);
+    }
+
+    private function createPayablesWithRecurrence(Company $company, array $data, bool $isRecurring, ?string $recurrenceEnd): int
+    {
+        unset($data['is_recurring'], $data['recurrence_end_month']);
+        if (! $isRecurring || ! $recurrenceEnd) {
+            $company->payables()->create($data);
+            return 1;
+        }
+
+        $firstDueDate = Carbon::parse($data['due_date']);
+        $endMonth = Carbon::createFromFormat('Y-m-d', $recurrenceEnd.'-01')->endOfMonth();
+        $created = 0;
+
+        for ($dueDate = $firstDueDate->copy(); $dueDate->lte($endMonth); $dueDate->addMonthNoOverflow()) {
+            $payload = $data;
+            $payload['due_date'] = $dueDate->toDateString();
+            $payload['description'] = $data['description'].' - '.$dueDate->format('m/Y');
+            if (! empty($data['document_number'])) {
+                $payload['document_number'] = $data['document_number'].'-'.$dueDate->format('Y-m');
+            }
+            $company->payables()->create($payload);
+            $created++;
+        }
+
+        return $created;
     }
 
     private function formData(): array
@@ -178,10 +215,11 @@ class PayableController extends Controller
 
     private function dateRange(Request $request): array
     {
-        $period = $request->query('periodo');
+        $rawPeriod = $request->query('periodo');
+        $period = $rawPeriod ?: 'next7';
         $today = Carbon::today();
         $hasCustomDates = $request->query('inicio') || $request->query('fim');
-        $useCustomDates = $period === 'custom' || ($period === null && $hasCustomDates);
+        $useCustomDates = $period === 'custom' || ($rawPeriod === null && $hasCustomDates);
         $customStart = $useCustomDates ? $this->validDate($request->query('inicio')) : null;
         $customEnd = $useCustomDates ? $this->validDate($request->query('fim')) : null;
 

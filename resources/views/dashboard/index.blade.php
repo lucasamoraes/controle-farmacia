@@ -11,6 +11,14 @@
     $maxChannel = max(collect($channelRevenueChart)->map(fn ($row) => ($row['delivery'] ?? 0) + ($row['counter'] ?? 0))->max() ?? 0, 1);
     $maxExpense = max(collect($monthlyExpenseChart)->max('value') ?? 0, 1);
     $maxMovementType = max(collect($employeeDashboard['movementTypes'])->max('total') ?? 0, 1);
+    $lastRevenueRow = collect($monthlyRevenueChart)->last();
+    $lastChannelRow = collect($channelRevenueChart)->last();
+    $deliveryTicket = (($lastChannelRow['delivery_count'] ?? 0) > 0)
+        ? (($lastChannelRow['delivery'] ?? 0) / max(1, ($lastChannelRow['delivery_count'] ?? 0)))
+        : 0;
+    $counterTicket = (($lastChannelRow['counter_count'] ?? 0) > 0)
+        ? (($lastChannelRow['counter'] ?? 0) / max(1, ($lastChannelRow['counter_count'] ?? 0)))
+        : 0;
     $maxEmployeeTop = max(collect($employeeDashboard['topEmployees'])->max('total') ?? 0, 1);
     $canWriteFinance = auth()->user()->canWriteFinance($company);
     $tabFilters = array_filter([
@@ -198,13 +206,19 @@
         <div class="grid stats">
             <div class="card"><div class="metric-label">Meses cadastrados</div><div class="metric-value">{{ count($monthlyRevenueChart) }}</div></div>
             <div class="card"><div class="metric-label">Maior faturamento</div><div class="metric-value">{{ $fmtMoney($maxRevenue) }}</div></div>
-            <div class="card"><div class="metric-label">Maior media diaria</div><div class="metric-value">{{ $fmtMoney($maxWeekday) }}</div></div>
-            <div class="card"><div class="metric-label">Canais cadastrados</div><div class="metric-value">{{ count($channelRevenueChart) }}</div></div>
+            <div class="card"><div class="metric-label">Crescimento ultimo mes</div><div class="metric-value" style="color:{{ ($lastRevenueRow['growth'] ?? 0) >= 0 ? 'var(--brand)' : 'var(--danger)' }};">{{ $lastRevenueRow && $lastRevenueRow['growth'] !== null ? (($lastRevenueRow['growth'] ?? 0) >= 0 ? '+' : '') . number_format($lastRevenueRow['growth'], 1, ',', '.') . '%' : '-' }}</div></div>
+            <div class="card"><div class="metric-label">Ticket medio geral</div><div class="metric-value">{{ $fmtMoney($financeSummary['averageTicket'] ?? 0) }}</div></div>
+        </div>
+
+        <div class="grid" style="grid-template-columns:1fr 1fr; margin-bottom:18px;">
+            <div class="card"><div class="metric-label">Ticket estimado delivery</div><div class="metric-value">{{ $fmtMoney($deliveryTicket) }}</div></div>
+            <div class="card"><div class="metric-label">Ticket estimado balcao</div><div class="metric-value">{{ $fmtMoney($counterTicket) }}</div></div>
         </div>
 
         <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-bottom:18px;">
             <section class="card">
                 <h2 class="panel-title">Faturamento mensal</h2>
+                <div class="chart-box"><canvas id="revenueBarChart"></canvas></div>
                 <div class="bar-list">
                     @forelse ($monthlyRevenueChart as $row)
                         @php $growth = $row['growth']; @endphp
@@ -223,6 +237,7 @@
 
             <section class="card">
                 <h2 class="panel-title">Media por dia da semana</h2>
+                <div class="chart-box"><canvas id="weekdayBarChart"></canvas></div>
                 <div class="bar-list">
                     @foreach ($weekdayAverageChart as $row)
                         <div class="bar-row">
@@ -236,6 +251,7 @@
 
         <section class="card">
             <h2 class="panel-title">Faturamento por canal</h2>
+            <div class="chart-box"><canvas id="channelBarChart"></canvas></div>
             <div class="bar-list">
                 @forelse ($channelRevenueChart as $row)
                     @php $totalChannel = $row['delivery'] + $row['counter']; @endphp
@@ -293,6 +309,58 @@
                 </div>
             </section>
         </div>
+    @endif
+
+    @if ($dashboardTab === 'vendas')
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script>
+            (() => {
+                if (!window.Chart) return;
+                const money = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                const commonOptions = {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { boxWidth: 10, font: { family: 'Arial' } } },
+                        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${money(ctx.parsed.y ?? ctx.parsed.x)}` } }
+                    },
+                    scales: { y: { beginAtZero: true, ticks: { callback: money } } }
+                };
+                const revenue = @json($monthlyRevenueChart);
+                const weekdays = @json($weekdayAverageChart);
+                const channels = @json($channelRevenueChart);
+
+                new Chart(document.getElementById('revenueBarChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: revenue.map((row) => row.label),
+                        datasets: [
+                            { type: 'bar', label: 'Faturamento', data: revenue.map((row) => row.value), backgroundColor: '#2563eb', borderRadius: 4 },
+                            { type: 'line', label: 'Tendencia', data: revenue.map((row) => row.value), borderColor: '#0f766e', backgroundColor: '#0f766e', tension: .3 }
+                        ]
+                    },
+                    options: commonOptions
+                });
+
+                new Chart(document.getElementById('weekdayBarChart'), {
+                    type: 'bar',
+                    data: { labels: weekdays.map((row) => row.label), datasets: [{ label: 'Media diaria', data: weekdays.map((row) => row.value), backgroundColor: '#0f766e', borderRadius: 4 }] },
+                    options: commonOptions
+                });
+
+                new Chart(document.getElementById('channelBarChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: channels.map((row) => row.label),
+                        datasets: [
+                            { label: 'Delivery', data: channels.map((row) => row.delivery), backgroundColor: '#2563eb', borderRadius: 4 },
+                            { label: 'Balcao', data: channels.map((row) => row.counter), backgroundColor: '#0f766e', borderRadius: 4 }
+                        ]
+                    },
+                    options: { ...commonOptions, scales: { x: { stacked: false }, y: commonOptions.scales.y } }
+                });
+            })();
+        </script>
     @endif
 @endsection
 

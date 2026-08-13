@@ -79,6 +79,24 @@
     </label>
 </div>
 
+@if (! isset($payable) || ! $payable->exists)
+    <section class="card" style="padding:14px;">
+        <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" name="is_recurring" value="1" @checked(old('is_recurring')) style="width:auto; min-height:auto;" data-toggle-recurring>
+            Criar recorrencia mensal
+        </label>
+        <div class="field-grid" style="margin-top:12px;" data-recurring-fields hidden>
+            <label>Repetir ate
+                <input type="month" name="recurrence_end_month" value="{{ old('recurrence_end_month') }}">
+                @error('recurrence_end_month') <span class="error">{{ $message }}</span> @enderror
+            </label>
+            <div class="alert info" style="margin:0;">
+                O sistema cria uma conta por mes mantendo o mesmo dia de vencimento, valor, fornecedor e categoria.
+            </div>
+        </div>
+    </section>
+@endif
+
 <label>Observacoes
     <textarea name="notes">{{ old('notes', $payable->notes ?? '') }}</textarea>
     @error('notes') <span class="error">{{ $message }}</span> @enderror
@@ -136,5 +154,14 @@
             filter();
         });
         filter();
+    })();
+
+    (() => {
+        const checkbox = document.querySelector('[data-toggle-recurring]');
+        const fields = document.querySelector('[data-recurring-fields]');
+        if (!checkbox || !fields) return;
+        const refresh = () => fields.hidden = !checkbox.checked;
+        checkbox.addEventListener('change', refresh);
+        refresh();
     })();
 </script>

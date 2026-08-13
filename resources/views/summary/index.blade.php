@@ -1,7 +1,6 @@
 @extends('layouts.app', ['pageTitle' => 'Resumo'])
 
 @php
-    $monthInput = $selectedMonth->format('Y-m');
     $maxCategory = max((float) $categoryTotals->max('total'), 1);
     $maxSupplier = max((float) $supplierTotals->max('total'), 1);
     $fmtMoney = fn ($value) => 'R$ ' . number_format((float) $value, 2, ',', '.');
@@ -16,12 +15,11 @@
             <p class="subtitle">Visao mensal inspirada na aba Resumo da planilha.</p>
         </div>
         <form class="actions" method="get" action="{{ route('resumo.index') }}">
-            <input type="month" name="mes" value="{{ $monthInput }}" style="width:160px;">
             <input type="date" name="inicio" value="{{ $dateStart->toDateString() }}" style="width:150px;">
             <input type="date" name="fim" value="{{ $dateEnd->toDateString() }}" style="width:150px;">
             <button class="btn secondary" type="submit">Filtrar</button>
             @if ($canWriteFinance)
-                <a class="btn" href="{{ route('faturamento-mensal.create', ['mes' => $monthInput]) }}">Registrar faturamento</a>
+                <a class="btn" href="{{ route('faturamento-mensal.create', ['mes' => $selectedMonth->format('Y-m')]) }}">Registrar faturamento</a>
             @endif
         </form>
     </div>

@@ -122,6 +122,41 @@ class SearchAndFilterTest extends TestCase
             ->assertDontSee('Conta fora do intervalo');
     }
 
+    public function test_payable_category_filter_results(): void
+    {
+        [$user, $company, $category] = $this->context();
+        $otherCategory = FinancialCategory::create([
+            'company_id' => $company->id,
+            'name' => 'Marketing',
+            'type' => 'expense',
+        ]);
+
+        Payable::create([
+            'company_id' => $company->id,
+            'financial_category_id' => $category->id,
+            'description' => 'Conta mercadoria',
+            'amount' => 100,
+            'due_date' => now()->addDays(2)->toDateString(),
+            'status' => 'open',
+            'source' => 'manual',
+        ]);
+        Payable::create([
+            'company_id' => $company->id,
+            'financial_category_id' => $otherCategory->id,
+            'description' => 'Conta marketing',
+            'amount' => 200,
+            'due_date' => now()->addDays(2)->toDateString(),
+            'status' => 'open',
+            'source' => 'manual',
+        ]);
+
+        $this->actingAs($user)
+            ->get("/contas-a-pagar?categoria={$otherCategory->id}")
+            ->assertOk()
+            ->assertSee('Conta marketing')
+            ->assertDontSee('Conta mercadoria');
+    }
+
     private function context(): array
     {
         $user = User::factory()->create();

@@ -198,6 +198,8 @@ class DashboardController extends Controller
                 'label' => $row->reference_month->format('m/Y'),
                 'delivery' => (float) $row->delivery_revenue,
                 'counter' => (float) $row->counter_revenue,
+                'delivery_count' => (int) $row->delivery_sales_count,
+                'counter_count' => (int) $row->counter_sales_count,
             ])
             ->all();
     }

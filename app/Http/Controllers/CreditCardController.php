@@ -31,6 +31,10 @@ class CreditCardController extends Controller
     {
         $this->company()->creditCards()->create($this->validated($request));
 
+        if ($request->input('_redirect_to') === 'faturas-cartao.create') {
+            return redirect()->route('faturas-cartao.create')->with('status', 'Cartao cadastrado. Agora selecione-o na fatura.');
+        }
+
         return redirect()->route('configuracoes.cartoes.index')->with('status', 'Cartao cadastrado.');
     }
 

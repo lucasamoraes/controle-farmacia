@@ -27,15 +27,18 @@
 
         <div class="field-grid">
             <label>Cartao
-                <select name="credit_card_id" required>
-                    <option value="">Selecione</option>
-                    @foreach ($creditCards as $card)
-                        <option value="{{ $card->id }}" @selected((string) old('credit_card_id', $invoice->credit_card_id) === (string) $card->id)>{{ $card->name }}</option>
-                    @endforeach
-                </select>
+                <div style="display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:8px;">
+                    <select name="credit_card_id" required>
+                        <option value="">Selecione</option>
+                        @foreach ($creditCards as $card)
+                            <option value="{{ $card->id }}" @selected((string) old('credit_card_id', $invoice->credit_card_id) === (string) $card->id)>{{ $card->name }}</option>
+                        @endforeach
+                    </select>
+                    <button class="btn secondary" type="button" data-open-panel="quick-card">+</button>
+                </div>
                 @error('credit_card_id') <span class="error">{{ $message }}</span> @enderror
                 @if ($creditCards->isEmpty())
-                    <span class="error">Cadastre um cartao em Configuracao > Cartoes antes de lancar faturas.</span>
+                    <span class="error">Cadastre um cartao pelo botao + para lancar faturas.</span>
                 @endif
             </label>
             <label>Mes da fatura
@@ -43,6 +46,24 @@
                 @error('reference_month') <span class="error">{{ $message }}</span> @enderror
             </label>
         </div>
+
+        <section class="card" data-panel="quick-card" hidden style="padding:14px;">
+            <h2 class="panel-title">Cadastrar cartao rapido</h2>
+            <div class="field-grid">
+                <label>Nome do cartao
+                    <input name="quick_card_name" form="quick-card-form" placeholder="Ex: Nubank">
+                </label>
+                <label>Dia de vencimento
+                    <input type="number" min="1" max="31" name="due_day" form="quick-card-form" value="10">
+                </label>
+            </div>
+            <label>Dia de fechamento
+                <input type="number" min="1" max="31" name="closing_day" form="quick-card-form">
+            </label>
+            <div class="actions">
+                <button class="btn secondary" type="submit" form="quick-card-form">Salvar cartao</button>
+            </div>
+        </section>
 
         <div class="field-grid">
             <label>Vencimento
@@ -120,6 +141,12 @@
         </div>
     </form>
 
+    <form id="quick-card-form" method="post" action="{{ route('configuracoes.cartoes.store') }}" data-confirm-title="Salvar cartao" data-confirm-message="Deseja cadastrar este cartao?" data-confirm-button="Salvar">
+        @csrf
+        <input type="hidden" name="_redirect_to" value="faturas-cartao.create">
+        <input type="hidden" name="name" data-quick-card-name>
+    </form>
+
     <template data-card-item-template>
         <div data-card-item class="card" style="padding:12px;">
             <div class="field-grid" style="grid-template-columns:2fr 1.4fr 1fr auto;">
@@ -185,5 +212,12 @@
             if (event.target.matches('[data-card-amount]')) refreshCardItems();
         });
         refreshCardItems();
+
+        const quickCardForm = document.getElementById('quick-card-form');
+        quickCardForm?.addEventListener('submit', () => {
+            const visibleName = document.querySelector('[name="quick_card_name"]');
+            const hiddenName = document.querySelector('[data-quick-card-name]');
+            if (visibleName && hiddenName) hiddenName.value = visibleName.value;
+        });
     </script>
 @endsection

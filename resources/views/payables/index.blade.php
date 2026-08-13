@@ -19,6 +19,7 @@
         $baseFilters = array_filter([
             'busca' => $search,
             'status' => $statusFilter,
+            'categoria' => $categoryFilter,
         ], fn ($value) => $value !== null && $value !== '');
         $periodLink = fn ($value) => route('contas-a-pagar.index', array_merge($baseFilters, ['periodo' => $value]));
     @endphp
@@ -35,6 +36,14 @@
                     <option value="overdue" @selected($statusFilter === 'overdue')>Vencido</option>
                     <option value="paid" @selected($statusFilter === 'paid')>Pago</option>
                     <option value="cancelled" @selected($statusFilter === 'cancelled')>Cancelado</option>
+                </select>
+            </label>
+            <label>Categoria
+                <select name="categoria">
+                    <option value="">Todas</option>
+                    @foreach ($categories as $category)
+                        <option value="{{ $category->id }}" @selected((string) $categoryFilter === (string) $category->id)>{{ $category->name }}</option>
+                    @endforeach
                 </select>
             </label>
             <label>Periodo
@@ -63,7 +72,7 @@
             </div>
             <div class="filter-actions">
                 <button class="btn secondary" type="submit">Filtrar</button>
-                @if ($search !== '' || $statusFilter || $period || $dateStart || $dateEnd)
+                @if ($search !== '' || $statusFilter || $period !== 'next7' || $categoryFilter || $dateStart || $dateEnd)
                     <a class="btn secondary" href="{{ route('contas-a-pagar.index') }}">Limpar</a>
                 @endif
             </div>
@@ -76,7 +85,7 @@
             <div class="metric-value">R$ {{ number_format($filteredTotal, 2, ',', '.') }}</div>
         </div>
         <div class="card">
-            <div class="metric-label">Periodo</div>
+            <div class="metric-label">{{ $period === 'next7' ? 'Primeira visualizacao' : 'Periodo' }}</div>
             <div class="metric-value" style="font-size:18px;">{{ $dateStart ? \Illuminate\Support\Carbon::parse($dateStart)->format('d/m/Y') : 'Inicio' }} - {{ $dateEnd ? \Illuminate\Support\Carbon::parse($dateEnd)->format('d/m/Y') : 'Fim' }}</div>
         </div>
         <div class="card">

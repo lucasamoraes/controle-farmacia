@@ -51,4 +51,35 @@ class FinancialFlowTest extends TestCase
             'status' => 'open',
         ]);
     }
+
+    public function test_user_can_create_recurring_payables_until_selected_month(): void
+    {
+        $user = User::factory()->create();
+        $company = Company::create(['name' => 'Farmacia Teste']);
+        $company->users()->attach($user->id, ['role' => 'owner']);
+        $category = FinancialCategory::create([
+            'company_id' => $company->id,
+            'name' => 'Aluguel',
+            'type' => 'expense',
+        ]);
+
+        $this->actingAs($user)
+            ->post('/contas-a-pagar', [
+                'financial_category_id' => $category->id,
+                'description' => 'Aluguel da loja',
+                'amount' => 1000,
+                'due_date' => '2026-08-10',
+                'is_recurring' => 1,
+                'recurrence_end_month' => '2026-12',
+            ])
+            ->assertRedirect('/contas-a-pagar');
+
+        $this->assertDatabaseCount('payables', 5);
+        $this->assertDatabaseHas('payables', [
+            'company_id' => $company->id,
+            'description' => 'Aluguel da loja - 12/2026',
+            'due_date' => '2026-12-10 00:00:00',
+            'amount' => 1000,
+        ]);
+    }
 }
