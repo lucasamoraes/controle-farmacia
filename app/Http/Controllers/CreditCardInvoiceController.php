@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class CreditCardInvoiceController extends Controller
@@ -144,6 +145,8 @@ class CreditCardInvoiceController extends Controller
             if (! $faturas_cartao->payable_id) {
                 $faturas_cartao->update(['payable_id' => $payable->id]);
             }
+
+            $this->createRecurringInvoices($company, $card, $referenceMonth, $items, $data);
         });
 
         return redirect()->route('faturas-cartao.index')->with('status', 'Fatura atualizada.');
@@ -176,7 +179,7 @@ class CreditCardInvoiceController extends Controller
 
     private function validated(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'credit_card_id' => ['required', 'exists:credit_cards,id'],
             'reference_month' => ['required', 'date_format:Y-m'],
             'due_date' => ['required', 'date'],
@@ -191,6 +194,16 @@ class CreditCardInvoiceController extends Controller
             'items.*.recurrence_start_month' => ['nullable', 'date_format:Y-m'],
             'items.*.recurrence_end_month' => ['nullable', 'date_format:Y-m'],
         ]);
+
+        foreach ($data['items'] ?? [] as $index => $item) {
+            if (! empty($item['is_recurring']) && empty($item['recurrence_end_month'])) {
+                throw ValidationException::withMessages([
+                    "items.{$index}.recurrence_end_month" => 'Informe o mes final da recorrencia.',
+                ]);
+            }
+        }
+
+        return $data;
     }
 
     private function validItems(array $items): array
@@ -198,7 +211,7 @@ class CreditCardInvoiceController extends Controller
         return collect($items)
             ->filter(fn ($item) => trim((string) ($item['description'] ?? '')) !== '' && (float) ($item['amount'] ?? 0) > 0)
             ->map(fn ($item) => [
-                'financial_category_id' => $item['financial_category_id'] ?: null,
+                'financial_category_id' => $item['financial_category_id'] ?? null,
                 'description' => trim((string) $item['description']),
                 'amount' => round((float) $item['amount'], 2),
                 'is_recurring' => ! empty($item['is_recurring']),
@@ -254,13 +267,13 @@ class CreditCardInvoiceController extends Controller
                         'notes' => 'Fatura criada automaticamente por recorrencia.',
                     ]);
 
-                $invoice->items()->firstOrCreate([
+                $invoice->items()->updateOrCreate([
                     'description' => $item['description'],
                     'financial_category_id' => $item['financial_category_id'],
-                    'amount' => $item['amount'],
                     'recurrence_start_month' => $item['recurrence_start_month'],
                     'recurrence_end_month' => $item['recurrence_end_month'],
                 ], [
+                    'amount' => $item['amount'],
                     'is_recurring' => true,
                 ]);
 

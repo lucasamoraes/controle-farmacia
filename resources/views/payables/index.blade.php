@@ -73,7 +73,7 @@
             <div class="filter-actions">
                 <button class="btn secondary" type="submit">Filtrar</button>
                 @if ($search !== '' || $statusFilter || $period !== 'next7' || $categoryFilter || $dateStart || $dateEnd)
-                    <a class="btn secondary" href="{{ route('contas-a-pagar.index') }}">Limpar</a>
+                    <a class="btn secondary" href="{{ route('contas-a-pagar.index', ['periodo' => '']) }}">Limpar</a>
                 @endif
             </div>
         </div>

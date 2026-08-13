@@ -67,6 +67,73 @@ class CreditCardInvoiceTest extends TestCase
             'credit_card_id' => $card->id,
             'reference_month' => '2026-12-01 00:00:00',
             'card_name' => 'Visa Farmacia',
+            'total_amount' => 300,
+        ]);
+        $this->assertDatabaseHas('payables', [
+            'company_id' => $company->id,
+            'description' => 'Fatura cartao - Visa Farmacia - 12/2026',
+            'amount' => 300,
+            'source' => 'credit_card_invoice',
+        ]);
+    }
+
+    public function test_recurring_item_requires_end_month(): void
+    {
+        [$company, $finance] = $this->companyWithUser('finance');
+        $card = CreditCard::create(['company_id' => $company->id, 'name' => 'Visa', 'due_day' => 20]);
+
+        $this->actingAs($finance)
+            ->post('/faturas-cartao', [
+                'credit_card_id' => $card->id,
+                'reference_month' => '2026-08',
+                'due_date' => '2026-08-20',
+                'status' => 'open',
+                'items' => [
+                    ['description' => 'Gasolina', 'amount' => 300, 'is_recurring' => 1],
+                ],
+            ])
+            ->assertSessionHasErrors('items.0.recurrence_end_month');
+    }
+
+    public function test_editing_invoice_can_create_future_recurring_invoices(): void
+    {
+        [$company, $finance] = $this->companyWithUser('finance');
+        $card = CreditCard::create(['company_id' => $company->id, 'name' => 'Visa', 'due_day' => 20]);
+        $invoice = $company->creditCardInvoices()->create([
+            'credit_card_id' => $card->id,
+            'card_name' => $card->name,
+            'reference_month' => '2026-08-01',
+            'due_date' => '2026-08-20',
+            'total_amount' => 100,
+            'status' => 'open',
+        ]);
+
+        $this->actingAs($finance)
+            ->put("/faturas-cartao/{$invoice->id}", [
+                'credit_card_id' => $card->id,
+                'reference_month' => '2026-08',
+                'due_date' => '2026-08-20',
+                'status' => 'open',
+                'items' => [
+                    [
+                        'description' => 'Gasolina',
+                        'amount' => 250,
+                        'is_recurring' => 1,
+                        'recurrence_end_month' => '2026-10',
+                    ],
+                ],
+            ])
+            ->assertRedirect('/faturas-cartao');
+
+        $this->assertDatabaseHas('credit_card_invoices', [
+            'company_id' => $company->id,
+            'reference_month' => '2026-10-01 00:00:00',
+            'total_amount' => 250,
+        ]);
+        $this->assertDatabaseHas('payables', [
+            'company_id' => $company->id,
+            'description' => 'Fatura cartao - Visa - 10/2026',
+            'amount' => 250,
         ]);
     }
 

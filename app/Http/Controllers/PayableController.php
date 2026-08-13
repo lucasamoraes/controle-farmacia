@@ -215,11 +215,11 @@ class PayableController extends Controller
 
     private function dateRange(Request $request): array
     {
-        $rawPeriod = $request->query('periodo');
-        $period = $rawPeriod ?: 'next7';
+        $rawPeriod = $request->query('periodo', 'next7');
+        $period = $rawPeriod;
         $today = Carbon::today();
         $hasCustomDates = $request->query('inicio') || $request->query('fim');
-        $useCustomDates = $period === 'custom' || ($rawPeriod === null && $hasCustomDates);
+        $useCustomDates = $period === 'custom' || (! $request->has('periodo') && $hasCustomDates);
         $customStart = $useCustomDates ? $this->validDate($request->query('inicio')) : null;
         $customEnd = $useCustomDates ? $this->validDate($request->query('fim')) : null;
 
