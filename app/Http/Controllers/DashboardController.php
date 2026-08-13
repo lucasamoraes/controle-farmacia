@@ -77,11 +77,12 @@ class DashboardController extends Controller
             'topSuppliers' => $topSuppliers,
             'categoryTotals' => $categoryTotals,
             'monthlyRevenueChart' => $this->monthlyRevenueChart($company),
+            'revenueProjection' => $this->revenueProjection($company),
             'weekdayAverageChart' => $this->weekdayAverageChart($company, $dateStart, $dateEnd),
             'channelRevenueChart' => $this->channelRevenueChart($company),
             'monthlyExpenseChart' => $this->monthlyExpenseChart($company),
             'financeSummary' => $this->financeSummary($company, $dateStart),
-            'employeeDashboard' => $this->employeeDashboard($company, $dateStart, $dateEnd),
+            'employeeDashboard' => $this->employeeDashboard($company, $dateStart, $dateEnd, $request->integer('funcionario') ?: null),
             'financialAlerts' => $alerts->dashboardAlerts($company),
             'suppliersCount' => $company->suppliers()->count(),
         ]);
@@ -153,20 +154,72 @@ class DashboardController extends Controller
 
     private function monthlyRevenueChart(Company $company): array
     {
-        $rows = $company->monthlyRevenues()->orderBy('reference_month')->get();
+        $today = Carbon::today()->startOfMonth();
+        $yearStart = $today->copy()->startOfYear();
+        $rows = $company->monthlyRevenues()
+            ->whereBetween('reference_month', [$yearStart->toDateString(), $today->toDateString()])
+            ->orderBy('reference_month')
+            ->get()
+            ->keyBy(fn ($row) => $row->reference_month->format('Y-m'));
         $previous = null;
+        $months = collect();
 
-        return $rows->map(function ($row) use (&$previous) {
-            $value = (float) $row->gross_revenue;
+        for ($month = $yearStart->copy(); $month->lte($today); $month->addMonth()) {
+            $row = $rows->get($month->format('Y-m'));
+            $value = (float) ($row->gross_revenue ?? 0);
             $growth = $previous && $previous > 0 ? (($value - $previous) / $previous) * 100 : null;
-            $previous = $value;
+            if ($value > 0) {
+                $previous = $value;
+            }
 
-            return [
-                'label' => $row->reference_month->format('m/Y'),
+            $months->push([
+                'label' => $month->format('m/Y'),
+                'sort' => $month->format('Y-m'),
                 'value' => $value,
                 'growth' => $growth,
-            ];
-        })->all();
+            ]);
+        }
+
+        return $months->reverse()->values()->all();
+    }
+
+    private function revenueProjection(Company $company): array
+    {
+        $rows = $company->monthlyRevenues()
+            ->where('gross_revenue', '>', 0)
+            ->orderBy('reference_month')
+            ->get();
+        $growths = [];
+        $previous = null;
+
+        foreach ($rows as $row) {
+            $value = (float) $row->gross_revenue;
+            if ($previous && $previous > 0) {
+                $growths[] = ($value - $previous) / $previous;
+            }
+            $previous = $value;
+        }
+
+        $averageGrowth = count($growths) > 0 ? array_sum($growths) / count($growths) : 0;
+        $last = $rows->last();
+        $nextMonth = $last ? $last->reference_month->copy()->addMonth()->startOfMonth() : now()->copy()->addMonth()->startOfMonth();
+        $projectedNext = $last ? ((float) $last->gross_revenue) * (1 + $averageGrowth) : 0;
+
+        $currentMonth = now()->startOfMonth();
+        $currentSales = $company->dailySales()
+            ->whereBetween('sale_date', [$currentMonth->toDateString(), now()->toDateString()])
+            ->get();
+        $currentProjection = 0;
+        if ($currentSales->count() > 0) {
+            $currentProjection = ((float) $currentSales->sum('amount') / max(1, $currentSales->count())) * $currentMonth->daysInMonth;
+        }
+
+        return [
+            'averageGrowth' => $averageGrowth * 100,
+            'nextMonthLabel' => $nextMonth->format('m/Y'),
+            'projectedNextRevenue' => max(0, $projectedNext),
+            'currentMonthProjection' => max(0, $currentProjection),
+        ];
     }
 
     private function weekdayAverageChart(Company $company, ?string $dateStart, ?string $dateEnd): array
@@ -191,8 +244,12 @@ class DashboardController extends Controller
 
     private function channelRevenueChart(Company $company): array
     {
+        $today = Carbon::today()->startOfMonth();
+        $yearStart = $today->copy()->startOfYear();
+
         return $company->monthlyRevenues()
-            ->orderBy('reference_month')
+            ->whereBetween('reference_month', [$yearStart->toDateString(), $today->toDateString()])
+            ->orderByDesc('reference_month')
             ->get()
             ->map(fn ($row) => [
                 'label' => $row->reference_month->format('m/Y'),
@@ -206,16 +263,40 @@ class DashboardController extends Controller
 
     private function monthlyExpenseChart(Company $company): array
     {
+        $today = Carbon::today()->startOfMonth();
+        $yearStart = $today->copy()->startOfYear();
         $months = $company->payables()
             ->where('status', '!=', 'cancelled')
-            ->orderBy('due_date')
+            ->whereBetween('due_date', [$yearStart->toDateString(), $today->copy()->endOfMonth()->toDateString()])
             ->get()
             ->groupBy(fn ($payable) => $payable->due_date->format('Y-m'));
+        $revenues = $company->monthlyRevenues()
+            ->whereBetween('reference_month', [$yearStart->toDateString(), $today->toDateString()])
+            ->get()
+            ->keyBy(fn ($row) => $row->reference_month->format('Y-m'));
+        $chart = collect();
 
-        return $months->map(fn ($rows, $month) => [
-            'label' => Carbon::createFromFormat('Y-m-d', $month . '-01')->format('m/Y'),
-            'value' => (float) $rows->sum('amount'),
-        ])->values()->all();
+        for ($month = $yearStart->copy(); $month->lte($today); $month->addMonth()) {
+            $key = $month->format('Y-m');
+            $expense = (float) ($months->get($key, collect())->sum('amount'));
+            $revenue = (float) ($revenues->get($key)->gross_revenue ?? 0);
+            $chart->push([
+                'label' => $month->format('m/Y'),
+                'sort' => $key,
+                'value' => $expense,
+                'revenue' => $revenue,
+                'percent' => $revenue > 0 ? ($expense / $revenue) * 100 : null,
+            ]);
+        }
+
+        $values = $chart->pluck('value')->all();
+        $chart = $chart->map(function ($row, $index) use ($values) {
+            $slice = array_slice($values, 0, $index + 1);
+            $row['trend'] = count($slice) > 0 ? array_sum($slice) / count($slice) : 0;
+            return $row;
+        });
+
+        return $chart->reverse()->values()->all();
     }
 
     private function categoryTotals(Company $company, string $search, string $status, ?string $dateStart, ?string $dateEnd)
@@ -265,7 +346,7 @@ class DashboardController extends Controller
             ->values();
     }
 
-    private function employeeDashboard(Company $company, ?string $dateStart, ?string $dateEnd): array
+    private function employeeDashboard(Company $company, ?string $dateStart, ?string $dateEnd, ?int $selectedEmployeeId = null): array
     {
         $activeEmployees = $company->employees()->where('is_active', true)->get();
         $monthStart = $dateStart ? Carbon::parse($dateStart)->startOfMonth() : now()->startOfMonth();
@@ -315,6 +396,13 @@ class DashboardController extends Controller
             ])
             ->all();
 
+        $selectedEmployee = $selectedEmployeeId
+            ? $activeEmployees->firstWhere('id', $selectedEmployeeId)
+            : $activeEmployees->first();
+        $employeeMovementDetails = $selectedEmployee
+            ? $this->employeeMovementDetails($company, (int) $selectedEmployee->id, $monthStart, $monthEnd)
+            : [];
+
         return [
             'activeCount' => $activeEmployees->count(),
             'inactiveCount' => $company->employees()->where('is_active', false)->count(),
@@ -324,13 +412,49 @@ class DashboardController extends Controller
             'paidTotal' => 0,
             'monthly' => $monthly->all(),
             'movementTypes' => $movementTypes,
+            'selectedEmployeeId' => $selectedEmployee?->id,
+            'selectedEmployeeName' => $selectedEmployee?->name,
+            'employeeMovementDetails' => $employeeMovementDetails,
             'topEmployees' => $activeEmployees
-                ->map(fn ($employee) => ['name' => $employee->name, 'total' => (float) $employee->base_salary])
+                ->map(fn ($employee) => [
+                    'id' => $employee->id,
+                    'name' => $employee->name,
+                    'total' => (float) $employee->base_salary,
+                ])
                 ->sortByDesc('total')
                 ->take(5)
                 ->values()
                 ->all(),
         ];
+    }
+
+    private function employeeMovementDetails(Company $company, int $employeeId, Carbon $monthStart, Carbon $monthEnd): array
+    {
+        return DB::table('employee_payroll_items')
+            ->join('employees', 'employees.id', '=', 'employee_payroll_items.employee_id')
+            ->leftJoin('employee_movement_types', function ($join) use ($company) {
+                $join->on('employee_movement_types.code', '=', 'employee_payroll_items.event_type')
+                    ->where('employee_movement_types.company_id', '=', $company->id);
+            })
+            ->where('employees.company_id', $company->id)
+            ->where('employees.id', $employeeId)
+            ->whereBetween('employee_payroll_items.reference_month', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->groupBy('employee_payroll_items.event_type', 'employee_movement_types.name', 'employee_movement_types.kind')
+            ->orderByDesc(DB::raw('SUM(employee_payroll_items.earning + employee_payroll_items.deduction)'))
+            ->get([
+                DB::raw("COALESCE(employee_movement_types.name, employee_payroll_items.description, employee_payroll_items.event_type, 'Movimento') as label"),
+                DB::raw("COALESCE(employee_movement_types.kind, CASE WHEN SUM(employee_payroll_items.deduction) > SUM(employee_payroll_items.earning) THEN 'debit' ELSE 'credit' END) as kind"),
+                DB::raw('SUM(employee_payroll_items.earning) as earnings'),
+                DB::raw('SUM(employee_payroll_items.deduction) as deductions'),
+            ])
+            ->map(fn ($row) => [
+                'label' => $row->label,
+                'kind' => $row->kind,
+                'earnings' => (float) $row->earnings,
+                'deductions' => (float) $row->deductions,
+                'total' => (float) $row->earnings + (float) $row->deductions,
+            ])
+            ->all();
     }
 
     private function financeSummary(Company $company, ?string $dateStart): array

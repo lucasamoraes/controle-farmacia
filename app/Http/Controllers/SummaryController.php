@@ -34,6 +34,7 @@ class SummaryController extends Controller
         $grossRevenue = (float) ($monthlyRevenue->gross_revenue ?? 0);
         $previousGrossRevenue = (float) ($previousRevenue->gross_revenue ?? 0);
         $channelSummary = $this->channelSummary($monthlyRevenue);
+        $periodInsights = $this->periodInsights($company, $monthStart, $monthEnd, $grossRevenue, $totalExpenses);
 
         return view('summary.index', [
             'company' => $company,
@@ -54,6 +55,7 @@ class SummaryController extends Controller
             'expensesVsCurrentRevenue' => $this->ratio($totalExpenses, $grossRevenue),
             'expensesVsPreviousRevenue' => $this->ratio($totalExpenses, $previousGrossRevenue),
             'profitEstimate' => $grossRevenue - $totalExpenses,
+            'periodInsights' => $periodInsights,
         ]);
     }
 
@@ -183,6 +185,40 @@ class SummaryController extends Controller
         }
 
         return $months;
+    }
+
+    private function periodInsights(Company $company, Carbon $start, Carbon $end, float $grossRevenue, float $totalExpenses): array
+    {
+        $days = max(1, $start->diffInDays($end) + 1);
+        $dailySales = $company->dailySales()
+            ->whereBetween('sale_date', [$start->toDateString(), $end->toDateString()])
+            ->get();
+        $dailyRevenue = (float) $dailySales->sum('amount');
+        $revenueBase = $dailyRevenue > 0 ? $dailyRevenue : $grossRevenue;
+        $openPayables = (float) $company->payables()
+            ->whereBetween('due_date', [$start, $end])
+            ->where('status', 'open')
+            ->sum('amount');
+        $overduePayables = (float) $company->payables()
+            ->whereBetween('due_date', [$start, $end])
+            ->where('status', 'open')
+            ->whereDate('due_date', '<', now()->toDateString())
+            ->sum('amount');
+        $paidPayables = (float) $company->payables()
+            ->whereBetween('due_date', [$start, $end])
+            ->where('status', 'paid')
+            ->sum('amount');
+
+        return [
+            'days' => $days,
+            'dailyRevenueAverage' => $revenueBase / $days,
+            'dailyExpenseAverage' => $totalExpenses / $days,
+            'openPayables' => $openPayables,
+            'overduePayables' => $overduePayables,
+            'paidPayables' => $paidPayables,
+            'cashNeed' => max(0, $openPayables - max(0, $revenueBase - $paidPayables)),
+            'dailySalesCount' => $dailySales->count(),
+        ];
     }
 
     private function ratio(float $value, float $base): ?float

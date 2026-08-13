@@ -110,7 +110,7 @@
         .modal[hidden], .modal-backdrop[hidden] { display:none; }
         .modal-panel { width:min(560px, 100%); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:20px; box-shadow:0 24px 70px rgba(15,23,42,.24); }
         th[data-sort-table] { cursor:pointer; user-select:none; }
-        th[data-sort-table]::after { content:' ↑↓'; color:#94a3b8; font-size:11px; text-transform:none; }
+        th[data-sort-table]::after { content:' \2191\2193'; color:#94a3b8; font-size:11px; text-transform:none; }
         .chart-box { position:relative; height:320px; width:100%; }
         .mobile-backdrop { display:none; }
         @media (max-width: 980px) { .stats { grid-template-columns:repeat(2, minmax(0,1fr)); } .content { padding:22px; } }

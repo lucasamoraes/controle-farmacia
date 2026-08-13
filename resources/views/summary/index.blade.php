@@ -12,7 +12,7 @@
     <div class="actions" style="justify-content:space-between; align-items:flex-start;">
         <div>
             <h1 class="title">Resumo financeiro</h1>
-            <p class="subtitle">Visao mensal inspirada na aba Resumo da planilha.</p>
+            <p class="subtitle">Consulta rapida por periodo para acompanhar caixa, despesas e compras.</p>
         </div>
         <form class="actions" method="get" action="{{ route('resumo.index') }}">
             <input type="date" name="inicio" value="{{ $dateStart->toDateString() }}" style="width:150px;">
@@ -25,37 +25,25 @@
     </div>
 
     <div class="grid stats">
-        <div class="card"><div class="metric-label">Faturamento</div><div class="metric-value">{{ $fmtMoney($grossRevenue) }}</div></div>
-        <div class="card"><div class="metric-label">Despesas do mes</div><div class="metric-value">{{ $fmtMoney($totalExpenses) }}</div></div>
-        <div class="card"><div class="metric-label">Compras mercadoria</div><div class="metric-value">{{ $fmtMoney($stockPurchases) }}</div></div>
+        <div class="card"><div class="metric-label">Faturamento do periodo</div><div class="metric-value">{{ $fmtMoney($grossRevenue) }}</div></div>
+        <div class="card"><div class="metric-label">Total de despesas</div><div class="metric-value">{{ $fmtMoney($totalExpenses) }}</div></div>
         <div class="card"><div class="metric-label">Resultado estimado</div><div class="metric-value" style="color:{{ $profitEstimate >= 0 ? 'var(--brand)' : 'var(--danger)' }};">{{ $fmtMoney($profitEstimate) }}</div></div>
+        <div class="card"><div class="metric-label">Necessidade de caixa</div><div class="metric-value" style="color:{{ $periodInsights['cashNeed'] > 0 ? 'var(--danger)' : 'var(--brand)' }};">{{ $fmtMoney($periodInsights['cashNeed']) }}</div></div>
     </div>
 
     <div class="grid" style="grid-template-columns:repeat(4, minmax(0, 1fr)); margin-bottom:18px;">
-        <div class="card"><div class="metric-label">Despesas / faturamento atual</div><div class="metric-value">{{ $fmtPercent($expensesVsCurrentRevenue) }}</div></div>
-        <div class="card"><div class="metric-label">Despesas / fat. anterior</div><div class="metric-value">{{ $fmtPercent($expensesVsPreviousRevenue) }}</div><p class="subtitle" style="margin-top:6px;">Base: {{ $previousMonth->format('m/Y') }}</p></div>
-        <div class="card"><div class="metric-label">Vendas</div><div class="metric-value">{{ number_format((int) ($monthlyRevenue->sales_count ?? 0), 0, ',', '.') }}</div></div>
-        <div class="card"><div class="metric-label">Ticket medio</div><div class="metric-value">{{ $fmtMoney($monthlyRevenue->average_ticket ?? 0) }}</div></div>
+        <div class="card"><div class="metric-label">Media diaria faturamento</div><div class="metric-value">{{ $fmtMoney($periodInsights['dailyRevenueAverage']) }}</div></div>
+        <div class="card"><div class="metric-label">Media diaria despesas</div><div class="metric-value">{{ $fmtMoney($periodInsights['dailyExpenseAverage']) }}</div></div>
+        <div class="card"><div class="metric-label">A pagar no periodo</div><div class="metric-value">{{ $fmtMoney($periodInsights['openPayables']) }}</div></div>
+        <div class="card"><div class="metric-label">Vencido no periodo</div><div class="metric-value" style="color:var(--danger);">{{ $fmtMoney($periodInsights['overduePayables']) }}</div></div>
     </div>
 
-    <section class="card" style="margin-bottom:18px;">
-        <h2 class="panel-title">Balcao x Delivery</h2>
-        <div class="table-wrap"><table>
-            <thead><tr><th>Canal</th><th>Faturamento</th><th>% do valor</th><th>Vendas</th><th>% das vendas</th><th>Ticket medio</th></tr></thead>
-            <tbody>
-                @foreach ($channelSummary as $channel)
-                    <tr>
-                        <td><strong>{{ $channel['label'] }}</strong></td>
-                        <td>{{ $fmtMoney($channel['revenue']) }}</td>
-                        <td>{{ $fmtPercent($channel['revenue_percent']) }}</td>
-                        <td>{{ number_format($channel['sales_count'], 0, ',', '.') }}</td>
-                        <td>{{ $fmtPercent($channel['sales_percent']) }}</td>
-                        <td>{{ $fmtMoney($channel['average_ticket']) }}</td>
-                    </tr>
-                @endforeach
-            </tbody>
-        </table></div>
-    </section>
+    <div class="grid" style="grid-template-columns:repeat(4, minmax(0, 1fr)); margin-bottom:18px;">
+        <div class="card"><div class="metric-label">Compras mercadoria</div><div class="metric-value">{{ $fmtMoney($stockPurchases) }}</div></div>
+        <div class="card"><div class="metric-label">Despesas / faturamento</div><div class="metric-value">{{ $fmtPercent($expensesVsCurrentRevenue) }}</div></div>
+        <div class="card"><div class="metric-label">Pago no periodo</div><div class="metric-value">{{ $fmtMoney($periodInsights['paidPayables']) }}</div></div>
+        <div class="card"><div class="metric-label">Dias analisados</div><div class="metric-value">{{ number_format($periodInsights['days'], 0, ',', '.') }}</div><p class="subtitle" style="margin-top:6px;">{{ $periodInsights['dailySalesCount'] }} dias com venda diaria</p></div>
+    </div>
 
     <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start;">
         <section class="card">

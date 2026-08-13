@@ -58,14 +58,13 @@ class SummaryDashboardTest extends TestCase
             ->assertSee('Resumo financeiro')
             ->assertSee('GRUPO SC')
             ->assertSee('Compra de mercadoria')
-            ->assertSee('Balcao x Delivery')
-            ->assertSee('Delivery')
-            ->assertSee('Balcao')
+            ->assertSee('Consulta rapida por periodo')
+            ->assertSee('Necessidade de caixa')
+            ->assertSee('Media diaria faturamento')
+            ->assertSee('A pagar no periodo')
             ->assertSee('R$ 10.000,00')
-            ->assertSee('R$ 3.000,00')
-            ->assertSee('R$ 7.000,00')
-            ->assertSee('20,0%')
-            ->assertSee('70,0%')
+            ->assertSee('R$ 312,50')
+            ->assertSee('25,0%')
             ->assertSee('R$ 2.500,00');
     }
 
