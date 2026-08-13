@@ -158,15 +158,21 @@ class DashboardController extends Controller
         $yearStart = $today->copy()->startOfYear();
         $rows = $company->monthlyRevenues()
             ->whereBetween('reference_month', [$yearStart->toDateString(), $today->toDateString()])
+            ->where('gross_revenue', '>', 0)
             ->orderBy('reference_month')
             ->get()
             ->keyBy(fn ($row) => $row->reference_month->format('Y-m'));
         $previous = null;
         $months = collect();
 
-        for ($month = $yearStart->copy(); $month->lte($today); $month->addMonth()) {
+        foreach ($rows as $key => $row) {
+            $month = $row->reference_month->copy()->startOfMonth();
             $row = $rows->get($month->format('Y-m'));
             $value = (float) ($row->gross_revenue ?? 0);
+            $currentProjection = $month->equalTo($today) ? $this->currentMonthRevenueProjection($company, $value) : null;
+            $actual = $currentProjection['actual'] ?? $value;
+            $projectedRemaining = $currentProjection['remaining'] ?? 0;
+            $projectedTotal = $actual + $projectedRemaining;
             $growth = $previous && $previous > 0 ? (($value - $previous) / $previous) * 100 : null;
             if ($value > 0) {
                 $previous = $value;
@@ -175,9 +181,35 @@ class DashboardController extends Controller
             $months->push([
                 'label' => $month->format('m/Y'),
                 'sort' => $month->format('Y-m'),
-                'value' => $value,
+                'value' => $projectedTotal,
+                'actual' => $actual,
+                'projected_remaining' => $projectedRemaining,
+                'projected_total' => $projectedTotal,
+                'is_current' => $month->equalTo($today),
+                'days_recorded' => $currentProjection['days_recorded'] ?? null,
+                'days_remaining' => $currentProjection['days_remaining'] ?? null,
+                'daily_average' => $currentProjection['daily_average'] ?? null,
                 'growth' => $growth,
             ]);
+        }
+
+        if (! $rows->has($today->format('Y-m'))) {
+            $currentProjection = $this->currentMonthRevenueProjection($company, 0);
+            if ($currentProjection['actual'] > 0) {
+                $months->push([
+                    'label' => $today->format('m/Y'),
+                    'sort' => $today->format('Y-m'),
+                    'value' => $currentProjection['total'],
+                    'actual' => $currentProjection['actual'],
+                    'projected_remaining' => $currentProjection['remaining'],
+                    'projected_total' => $currentProjection['total'],
+                    'is_current' => true,
+                    'days_recorded' => $currentProjection['days_recorded'],
+                    'days_remaining' => $currentProjection['days_remaining'],
+                    'daily_average' => $currentProjection['daily_average'],
+                    'growth' => $previous && $previous > 0 ? (($currentProjection['actual'] - $previous) / $previous) * 100 : null,
+                ]);
+            }
         }
 
         return $months->reverse()->values()->all();
@@ -205,20 +237,40 @@ class DashboardController extends Controller
         $nextMonth = $last ? $last->reference_month->copy()->addMonth()->startOfMonth() : now()->copy()->addMonth()->startOfMonth();
         $projectedNext = $last ? ((float) $last->gross_revenue) * (1 + $averageGrowth) : 0;
 
-        $currentMonth = now()->startOfMonth();
-        $currentSales = $company->dailySales()
-            ->whereBetween('sale_date', [$currentMonth->toDateString(), now()->toDateString()])
-            ->get();
-        $currentProjection = 0;
-        if ($currentSales->count() > 0) {
-            $currentProjection = ((float) $currentSales->sum('amount') / max(1, $currentSales->count())) * $currentMonth->daysInMonth;
-        }
+        $currentProjection = $this->currentMonthRevenueProjection($company);
 
         return [
             'averageGrowth' => $averageGrowth * 100,
             'nextMonthLabel' => $nextMonth->format('m/Y'),
             'projectedNextRevenue' => max(0, $projectedNext),
-            'currentMonthProjection' => max(0, $currentProjection),
+            'currentMonthActual' => $currentProjection['actual'],
+            'currentMonthRemainingProjection' => $currentProjection['remaining'],
+            'currentMonthProjection' => $currentProjection['total'],
+            'currentMonthDaysRecorded' => $currentProjection['days_recorded'],
+            'currentMonthDaysRemaining' => $currentProjection['days_remaining'],
+        ];
+    }
+
+    private function currentMonthRevenueProjection(Company $company, ?float $fallbackActual = null): array
+    {
+        $currentMonth = now()->startOfMonth();
+        $today = now()->startOfDay();
+        $currentSales = $company->dailySales()
+            ->whereBetween('sale_date', [$currentMonth->toDateString(), $today->toDateString()])
+            ->get();
+        $actual = $currentSales->count() > 0 ? (float) $currentSales->sum('amount') : (float) ($fallbackActual ?? 0);
+        $daysRecorded = $currentSales->count();
+        $daysRemaining = max(0, $currentMonth->daysInMonth - (int) $today->format('d'));
+        $dailyAverage = $daysRecorded > 0 ? $actual / $daysRecorded : 0;
+        $remaining = $daysRecorded > 0 ? $dailyAverage * $daysRemaining : 0;
+
+        return [
+            'actual' => max(0, $actual),
+            'remaining' => max(0, $remaining),
+            'total' => max(0, $actual + $remaining),
+            'days_recorded' => $daysRecorded,
+            'days_remaining' => $daysRemaining,
+            'daily_average' => $dailyAverage,
         ];
     }
 
@@ -482,14 +534,22 @@ class DashboardController extends Controller
             ->sum('payables.amount');
         $grossRevenue = (float) ($revenue->gross_revenue ?? 0);
         $previousGrossRevenue = (float) ($previousRevenue->gross_revenue ?? 0);
+        $projection = $month->equalTo(now()->startOfMonth())
+            ? $this->currentMonthRevenueProjection($company, $grossRevenue)
+            : ['total' => $grossRevenue, 'actual' => $grossRevenue, 'remaining' => 0, 'days_recorded' => null, 'days_remaining' => null];
+        $projectedRevenue = (float) $projection['total'];
 
         return [
             'monthLabel' => $month->format('m/Y'),
             'grossRevenue' => $grossRevenue,
+            'projectedRevenue' => $projectedRevenue,
+            'projectedRemainingRevenue' => (float) $projection['remaining'],
+            'projectionDaysRecorded' => $projection['days_recorded'],
+            'projectionDaysRemaining' => $projection['days_remaining'],
             'expenses' => $expenses,
             'stockPurchases' => $stockPurchases,
-            'profitEstimate' => $grossRevenue - $expenses,
-            'expensesVsRevenue' => $grossRevenue > 0 ? ($expenses / $grossRevenue) * 100 : null,
+            'profitEstimate' => $projectedRevenue - $expenses,
+            'expensesVsRevenue' => $projectedRevenue > 0 ? ($expenses / $projectedRevenue) * 100 : null,
             'expensesVsPreviousRevenue' => $previousGrossRevenue > 0 ? ($expenses / $previousGrossRevenue) * 100 : null,
             'salesCount' => (int) ($revenue->sales_count ?? 0),
             'averageTicket' => (float) ($revenue->average_ticket ?? 0),

@@ -123,7 +123,7 @@
 
     @if ($dashboardTab === 'financeiro')
         <div class="grid stats">
-            <div class="card"><div class="metric-label">Faturamento {{ $financeSummary['monthLabel'] }}</div><div class="metric-value">{{ $fmtMoney($financeSummary['grossRevenue']) }}</div></div>
+            <div class="card"><div class="metric-label">Projecao {{ $financeSummary['monthLabel'] }}</div><div class="metric-value">{{ $fmtMoney($financeSummary['projectedRevenue']) }}</div><p class="subtitle" style="margin-top:6px;">Realizado {{ $fmtMoney($financeSummary['grossRevenue']) }}</p></div>
             <div class="card"><div class="metric-label">Despesas do mes</div><div class="metric-value">{{ $fmtMoney($financeSummary['expenses']) }}</div></div>
             <div class="card"><div class="metric-label">Resultado estimado</div><div class="metric-value" style="color:{{ $financeSummary['profitEstimate'] >= 0 ? 'var(--brand)' : 'var(--danger)' }};">{{ $fmtMoney($financeSummary['profitEstimate']) }}</div></div>
             <div class="card"><div class="metric-label">Despesas / faturamento</div><div class="metric-value">{{ $fmtPercent($financeSummary['expensesVsRevenue']) }}</div></div>
@@ -132,7 +132,7 @@
         <div class="grid" style="grid-template-columns:repeat(4, minmax(0, 1fr)); margin-bottom:18px;">
             <div class="card"><div class="metric-label">Aberto no periodo</div><div class="metric-value">{{ $fmtMoney($openTotal) }}</div></div>
             <div class="card"><div class="metric-label">Vencido no periodo</div><div class="metric-value" style="color:var(--danger);">{{ $fmtMoney($overdueTotal) }}</div></div>
-            <div class="card"><div class="metric-label">Compras mercadoria</div><div class="metric-value">{{ $fmtMoney($financeSummary['stockPurchases']) }}</div></div>
+            <div class="card"><div class="metric-label">Previsao restante</div><div class="metric-value">{{ $fmtMoney($financeSummary['projectedRemainingRevenue']) }}</div><p class="subtitle" style="margin-top:6px;">{{ $financeSummary['projectionDaysRecorded'] ?? 0 }} dias informados | {{ $financeSummary['projectionDaysRemaining'] ?? 0 }} faltam</p></div>
             <div class="card"><div class="metric-label">Projecao prox. mes</div><div class="metric-value">{{ $fmtMoney($revenueProjection['projectedNextRevenue']) }}</div><p class="subtitle" style="margin-top:6px;">{{ $revenueProjection['nextMonthLabel'] }} | media {{ $fmtPercent($revenueProjection['averageGrowth']) }}</p></div>
         </div>
 
@@ -228,9 +228,19 @@
                         <div class="bar-row">
                             <div class="bar-meta">
                                 <span>{{ $row['label'] }}</span>
-                                <span>{{ $fmtMoney($row['value']) }} @if($growth !== null)<small style="color:{{ $growth >= 0 ? 'var(--brand)' : 'var(--danger)' }};">({{ $growth >= 0 ? '+' : '' }}{{ number_format($growth, 1, ',', '.') }}%)</small>@endif</span>
+                                <span>
+                                    {{ $fmtMoney($row['projected_total']) }}
+                                    @if($row['is_current'] && $row['projected_remaining'] > 0)
+                                        <small style="color:var(--muted);">(real {{ $fmtMoney($row['actual']) }} + prev. {{ $fmtMoney($row['projected_remaining']) }})</small>
+                                    @elseif($growth !== null)
+                                        <small style="color:{{ $growth >= 0 ? 'var(--brand)' : 'var(--danger)' }};">({{ $growth >= 0 ? '+' : '' }}{{ number_format($growth, 1, ',', '.') }}%)</small>
+                                    @endif
+                                </span>
                             </div>
-                            <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($row['value'] / $maxRevenue) * 100) }}%; --c:#2563eb;"></div></div>
+                            <div class="bar-track" style="display:flex;">
+                                <div style="height:100%; width:{{ min(100, ($row['actual'] / $maxRevenue) * 100) }}%; background:#2563eb;"></div>
+                                <div style="height:100%; width:{{ min(100, ($row['projected_remaining'] / $maxRevenue) * 100) }}%; background:#93c5fd;"></div>
+                            </div>
                         </div>
                     @empty
                         <p class="subtitle">Nenhum faturamento mensal cadastrado.</p>
@@ -364,11 +374,12 @@
                     data: {
                         labels: revenue.map((row) => row.label),
                         datasets: [
-                            { type: 'bar', label: 'Faturamento', data: revenue.map((row) => row.value), backgroundColor: '#2563eb', borderRadius: 4 },
-                            { type: 'line', label: 'Tendencia', data: revenue.map((row) => row.value), borderColor: '#0f766e', backgroundColor: '#0f766e', tension: .3 }
+                            { type: 'bar', label: 'Realizado', data: revenue.map((row) => row.actual), backgroundColor: '#2563eb', borderRadius: 4, stack: 'revenue' },
+                            { type: 'bar', label: 'Previsao restante', data: revenue.map((row) => row.projected_remaining), backgroundColor: '#93c5fd', borderRadius: 4, stack: 'revenue' },
+                            { type: 'line', label: 'Total projetado', data: revenue.map((row) => row.projected_total), borderColor: '#0f766e', backgroundColor: '#0f766e', tension: .3 }
                         ]
                     },
-                    options: commonOptions
+                    options: { ...commonOptions, scales: { x: { stacked: true }, y: { ...commonOptions.scales.y, stacked: true } } }
                 });
 
                 const weekdayCanvas = document.getElementById('weekdayBarChart');
