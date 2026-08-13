@@ -442,7 +442,7 @@ class DashboardController extends Controller
             ->groupBy('employee_payroll_items.event_type', 'employee_movement_types.name', 'employee_movement_types.kind')
             ->orderByDesc(DB::raw('SUM(employee_payroll_items.earning + employee_payroll_items.deduction)'))
             ->get([
-                DB::raw("COALESCE(employee_movement_types.name, employee_payroll_items.description, employee_payroll_items.event_type, 'Movimento') as label"),
+                DB::raw("COALESCE(employee_movement_types.name, employee_payroll_items.event_type, 'Movimento') as label"),
                 DB::raw("COALESCE(employee_movement_types.kind, CASE WHEN SUM(employee_payroll_items.deduction) > SUM(employee_payroll_items.earning) THEN 'debit' ELSE 'credit' END) as kind"),
                 DB::raw('SUM(employee_payroll_items.earning) as earnings'),
                 DB::raw('SUM(employee_payroll_items.deduction) as deductions'),
