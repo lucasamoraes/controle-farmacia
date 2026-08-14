@@ -21,12 +21,12 @@ class DashboardController extends Controller
         $dashboardTab = in_array($request->query('aba'), ['financeiro', 'funcionarios', 'vendas'], true)
             ? $request->query('aba')
             : 'financeiro';
-        [$dateStart, $dateEnd] = $this->dateRange($request);
+        [$dateStart, $dateEnd] = $this->dateRange($request, $company);
 
         if (($dateStart || $dateEnd) && ($request->query('periodo') === null || $period === 'custom')) {
             $period = 'custom';
         }
-        $today = Carbon::today();
+        $today = $this->operationalDate($company);
 
         $filtered = $this->filteredPayables($company, $search, $status, $dateStart, $dateEnd);
         $statusBase = $this->filteredPayables($company, $search, '', $dateStart, $dateEnd);
@@ -47,9 +47,14 @@ class DashboardController extends Controller
 
         $topSuppliers = (clone $filtered)
             ->leftJoin('suppliers', 'suppliers.id', '=', 'payables.supplier_id')
+            ->leftJoin('financial_categories', 'financial_categories.id', '=', 'payables.financial_category_id')
             ->where('payables.status', '!=', 'cancelled')
             ->where('payables.source', '!=', 'credit_card_invoice')
             ->whereNotNull('payables.supplier_id')
+            ->where(function ($query) {
+                $query->where('financial_categories.name', 'like', '%mercadoria%')
+                    ->orWhere('financial_categories.name', 'like', '%estoque%');
+            })
             ->groupBy('suppliers.id', 'suppliers.name')
             ->orderByDesc(DB::raw('SUM(payables.amount)'))
             ->limit(5)
@@ -88,10 +93,10 @@ class DashboardController extends Controller
         ]);
     }
 
-    private function dateRange(Request $request): array
+    private function dateRange(Request $request, Company $company): array
     {
         $period = $request->query('periodo');
-        $today = Carbon::today();
+        $today = $this->operationalDate($company);
         $hasCustomDates = $request->query('inicio') || $request->query('fim');
         $useCustomDates = $period === 'custom' || ($period === null && $hasCustomDates);
         $customStart = $useCustomDates ? $this->validDate($request->query('inicio')) : null;
@@ -129,9 +134,9 @@ class DashboardController extends Controller
             ->when($dateStart, fn ($query) => $query->whereDate('due_date', '>=', $dateStart))
             ->when($dateEnd, fn ($query) => $query->whereDate('due_date', '<=', $dateEnd))
             ->when($search !== '', fn ($query) => $this->applyPayableSearch($query, $search))
-            ->when(in_array($status, ['open', 'paid', 'cancelled', 'overdue'], true), function ($query) use ($status) {
+            ->when(in_array($status, ['open', 'paid', 'cancelled', 'overdue'], true), function ($query) use ($status, $company) {
                 if ($status === 'overdue') {
-                    $query->where('status', 'open')->whereDate('due_date', '<', Carbon::today());
+                    $query->where('status', 'open')->whereDate('due_date', '<', $this->operationalDate($company));
                     return;
                 }
 
@@ -154,10 +159,11 @@ class DashboardController extends Controller
 
     private function monthlyRevenueChart(Company $company): array
     {
-        $today = Carbon::today()->startOfMonth();
-        $yearStart = $today->copy()->startOfYear();
+        $operationalDate = $this->operationalDate($company);
+        $operationalMonth = $operationalDate->copy()->startOfMonth();
+        $yearStart = $operationalMonth->copy()->startOfYear();
         $rows = $company->monthlyRevenues()
-            ->whereBetween('reference_month', [$yearStart->toDateString(), $today->toDateString()])
+            ->whereBetween('reference_month', [$yearStart->toDateString(), $operationalMonth->toDateString()])
             ->where('gross_revenue', '>', 0)
             ->orderBy('reference_month')
             ->get()
@@ -169,12 +175,13 @@ class DashboardController extends Controller
             $month = $row->reference_month->copy()->startOfMonth();
             $row = $rows->get($month->format('Y-m'));
             $value = (float) ($row->gross_revenue ?? 0);
-            $currentProjection = $month->equalTo($today) ? $this->currentMonthRevenueProjection($company, $value) : null;
+            $currentProjection = $month->equalTo($operationalMonth) ? $this->currentMonthRevenueProjection($company, $value) : null;
             $actual = $currentProjection['actual'] ?? $value;
             $projectedRemaining = $currentProjection['remaining'] ?? 0;
             $projectedTotal = $actual + $projectedRemaining;
-            $growth = $previous && $previous > 0 ? (($value - $previous) / $previous) * 100 : null;
-            if ($value > 0) {
+            $growthBase = $month->equalTo($operationalMonth) ? $actual : $value;
+            $growth = $previous && $previous > 0 ? (($growthBase - $previous) / $previous) * 100 : null;
+            if ($value > 0 && $month->lt($operationalMonth)) {
                 $previous = $value;
             }
 
@@ -185,7 +192,7 @@ class DashboardController extends Controller
                 'actual' => $actual,
                 'projected_remaining' => $projectedRemaining,
                 'projected_total' => $projectedTotal,
-                'is_current' => $month->equalTo($today),
+                'is_current' => $month->equalTo($operationalMonth),
                 'days_recorded' => $currentProjection['days_recorded'] ?? null,
                 'days_remaining' => $currentProjection['days_remaining'] ?? null,
                 'daily_average' => $currentProjection['daily_average'] ?? null,
@@ -193,12 +200,12 @@ class DashboardController extends Controller
             ]);
         }
 
-        if (! $rows->has($today->format('Y-m'))) {
+        if (! $rows->has($operationalMonth->format('Y-m'))) {
             $currentProjection = $this->currentMonthRevenueProjection($company, 0);
             if ($currentProjection['actual'] > 0) {
                 $months->push([
-                    'label' => $today->format('m/Y'),
-                    'sort' => $today->format('Y-m'),
+                    'label' => $operationalMonth->format('m/Y'),
+                    'sort' => $operationalMonth->format('Y-m'),
                     'value' => $currentProjection['total'],
                     'actual' => $currentProjection['actual'],
                     'projected_remaining' => $currentProjection['remaining'],
@@ -217,14 +224,18 @@ class DashboardController extends Controller
 
     private function revenueProjection(Company $company): array
     {
+        $operationalMonth = $this->operationalDate($company)->startOfMonth();
         $rows = $company->monthlyRevenues()
             ->where('gross_revenue', '>', 0)
             ->orderBy('reference_month')
             ->get();
+        $closedRows = $rows
+            ->filter(fn ($row) => $row->reference_month->copy()->startOfMonth()->lt($operationalMonth))
+            ->values();
         $growths = [];
         $previous = null;
 
-        foreach ($rows as $row) {
+        foreach ($closedRows as $row) {
             $value = (float) $row->gross_revenue;
             if ($previous && $previous > 0) {
                 $growths[] = ($value - $previous) / $previous;
@@ -233,16 +244,17 @@ class DashboardController extends Controller
         }
 
         $averageGrowth = count($growths) > 0 ? array_sum($growths) / count($growths) : 0;
-        $last = $rows->last();
-        $nextMonth = $last ? $last->reference_month->copy()->addMonth()->startOfMonth() : now()->copy()->addMonth()->startOfMonth();
-        $projectedNext = $last ? ((float) $last->gross_revenue) * (1 + $averageGrowth) : 0;
-
         $currentProjection = $this->currentMonthRevenueProjection($company);
+        $nextMonth = $operationalMonth->copy()->addMonth();
+        $projectedNext = $currentProjection['total'] > 0 ? $currentProjection['total'] * (1 + $averageGrowth) : 0;
+        $maxClosedRevenue = (float) $closedRows->max('gross_revenue');
 
         return [
             'averageGrowth' => $averageGrowth * 100,
             'nextMonthLabel' => $nextMonth->format('m/Y'),
             'projectedNextRevenue' => max(0, $projectedNext),
+            'maxClosedRevenue' => $maxClosedRevenue,
+            'closedMonthsCount' => $closedRows->count(),
             'currentMonthActual' => $currentProjection['actual'],
             'currentMonthRemainingProjection' => $currentProjection['remaining'],
             'currentMonthProjection' => $currentProjection['total'],
@@ -253,14 +265,14 @@ class DashboardController extends Controller
 
     private function currentMonthRevenueProjection(Company $company, ?float $fallbackActual = null): array
     {
-        $currentMonth = now()->startOfMonth();
-        $today = now()->startOfDay();
+        $anchorDate = $this->operationalDate($company);
+        $currentMonth = $anchorDate->copy()->startOfMonth();
         $currentSales = $company->dailySales()
-            ->whereBetween('sale_date', [$currentMonth->toDateString(), $today->toDateString()])
+            ->whereBetween('sale_date', [$currentMonth->toDateString(), $anchorDate->toDateString()])
             ->get();
         $actual = $currentSales->count() > 0 ? (float) $currentSales->sum('amount') : (float) ($fallbackActual ?? 0);
         $daysRecorded = $currentSales->count();
-        $daysRemaining = max(0, $currentMonth->daysInMonth - (int) $today->format('d'));
+        $daysRemaining = max(0, $currentMonth->daysInMonth - (int) $anchorDate->format('d'));
         $dailyAverage = $daysRecorded > 0 ? $actual / $daysRecorded : 0;
         $remaining = $daysRecorded > 0 ? $dailyAverage * $daysRemaining : 0;
 
@@ -271,7 +283,15 @@ class DashboardController extends Controller
             'days_recorded' => $daysRecorded,
             'days_remaining' => $daysRemaining,
             'daily_average' => $dailyAverage,
+            'anchor_date' => $anchorDate->toDateString(),
         ];
+    }
+
+    private function operationalDate(Company $company): Carbon
+    {
+        $lastSaleDate = $company->dailySales()->max('sale_date');
+
+        return $lastSaleDate ? Carbon::parse($lastSaleDate)->startOfDay() : Carbon::today();
     }
 
     private function weekdayAverageChart(Company $company, ?string $dateStart, ?string $dateEnd): array
@@ -296,11 +316,12 @@ class DashboardController extends Controller
 
     private function channelRevenueChart(Company $company): array
     {
-        $today = Carbon::today()->startOfMonth();
+        $today = $this->operationalDate($company)->startOfMonth();
         $yearStart = $today->copy()->startOfYear();
 
         return $company->monthlyRevenues()
             ->whereBetween('reference_month', [$yearStart->toDateString(), $today->toDateString()])
+            ->where('gross_revenue', '>', 0)
             ->orderByDesc('reference_month')
             ->get()
             ->map(fn ($row) => [
@@ -315,23 +336,26 @@ class DashboardController extends Controller
 
     private function monthlyExpenseChart(Company $company): array
     {
-        $today = Carbon::today()->startOfMonth();
-        $yearStart = $today->copy()->startOfYear();
+        $operationalMonth = $this->operationalDate($company)->startOfMonth();
+        $yearStart = $operationalMonth->copy()->startOfYear();
         $months = $company->payables()
             ->where('status', '!=', 'cancelled')
-            ->whereBetween('due_date', [$yearStart->toDateString(), $today->copy()->endOfMonth()->toDateString()])
+            ->whereBetween('due_date', [$yearStart->toDateString(), $operationalMonth->copy()->endOfMonth()->toDateString()])
             ->get()
             ->groupBy(fn ($payable) => $payable->due_date->format('Y-m'));
         $revenues = $company->monthlyRevenues()
-            ->whereBetween('reference_month', [$yearStart->toDateString(), $today->toDateString()])
+            ->whereBetween('reference_month', [$yearStart->toDateString(), $operationalMonth->toDateString()])
             ->get()
             ->keyBy(fn ($row) => $row->reference_month->format('Y-m'));
         $chart = collect();
 
-        for ($month = $yearStart->copy(); $month->lte($today); $month->addMonth()) {
+        for ($month = $yearStart->copy(); $month->lte($operationalMonth); $month->addMonth()) {
             $key = $month->format('Y-m');
             $expense = (float) ($months->get($key, collect())->sum('amount'));
             $revenue = (float) ($revenues->get($key)->gross_revenue ?? 0);
+            if ($expense <= 0 && $revenue <= 0) {
+                continue;
+            }
             $chart->push([
                 'label' => $month->format('m/Y'),
                 'sort' => $key,
@@ -340,13 +364,6 @@ class DashboardController extends Controller
                 'percent' => $revenue > 0 ? ($expense / $revenue) * 100 : null,
             ]);
         }
-
-        $values = $chart->pluck('value')->all();
-        $chart = $chart->map(function ($row, $index) use ($values) {
-            $slice = array_slice($values, 0, $index + 1);
-            $row['trend'] = count($slice) > 0 ? array_sum($slice) / count($slice) : 0;
-            return $row;
-        });
 
         return $chart->reverse()->values()->all();
     }
@@ -376,9 +393,9 @@ class DashboardController extends Controller
                         ->orWhere('financial_categories.name', 'like', "%{$search}%");
                 });
             })
-            ->when(in_array($status, ['open', 'paid', 'cancelled', 'overdue'], true), function ($query) use ($status) {
+            ->when(in_array($status, ['open', 'paid', 'cancelled', 'overdue'], true), function ($query) use ($status, $company) {
                 if ($status === 'overdue') {
-                    $query->where('credit_card_invoices.status', 'open')->whereDate('credit_card_invoices.due_date', '<', Carbon::today());
+                    $query->where('credit_card_invoices.status', 'open')->whereDate('credit_card_invoices.due_date', '<', $this->operationalDate($company));
                     return;
                 }
 
@@ -513,7 +530,7 @@ class DashboardController extends Controller
     {
         $month = $dateStart
             ? Carbon::parse($dateStart)->startOfMonth()
-            : now()->startOfMonth();
+            : $this->operationalDate($company)->startOfMonth();
         $previousMonth = $month->copy()->subMonth();
         $monthStart = $month->copy()->startOfMonth();
         $monthEnd = $month->copy()->endOfMonth();
@@ -534,7 +551,7 @@ class DashboardController extends Controller
             ->sum('payables.amount');
         $grossRevenue = (float) ($revenue->gross_revenue ?? 0);
         $previousGrossRevenue = (float) ($previousRevenue->gross_revenue ?? 0);
-        $projection = $month->equalTo(now()->startOfMonth())
+        $projection = $month->equalTo($this->operationalDate($company)->startOfMonth())
             ? $this->currentMonthRevenueProjection($company, $grossRevenue)
             : ['total' => $grossRevenue, 'actual' => $grossRevenue, 'remaining' => 0, 'days_recorded' => null, 'days_remaining' => null];
         $projectedRevenue = (float) $projection['total'];

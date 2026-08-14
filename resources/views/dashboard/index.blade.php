@@ -9,7 +9,7 @@
     $maxRevenue = max(collect($monthlyRevenueChart)->max('value') ?? 0, 1);
     $maxWeekday = max(collect($weekdayAverageChart)->max('value') ?? 0, 1);
     $maxChannel = max(collect($channelRevenueChart)->map(fn ($row) => ($row['delivery'] ?? 0) + ($row['counter'] ?? 0))->max() ?? 0, 1);
-    $maxExpense = max(collect($monthlyExpenseChart)->max('value') ?? 0, 1);
+    $maxExpense = max(collect($monthlyExpenseChart)->map(fn ($row) => max($row['value'] ?? 0, $row['revenue'] ?? 0))->max() ?? 0, 1);
     $maxExpensePercent = max(collect($monthlyExpenseChart)->max('percent') ?? 0, 1);
     $maxMovementType = max(collect($employeeDashboard['movementTypes'])->max('total') ?? 0, 1);
     $maxEmployeeMovement = max(collect($employeeDashboard['employeeMovementDetails'])->max('total') ?? 0, 1);
@@ -145,9 +145,12 @@
                         <div class="bar-row">
                             <div class="bar-meta">
                                 <span>{{ $row['label'] }}</span>
-                                <span>{{ $fmtMoney($row['value']) }} @if($row['percent'] !== null)<small style="color:var(--muted);">({{ $fmtPercent($row['percent']) }})</small>@endif</span>
+                                <span>Fat. {{ $fmtMoney($row['revenue']) }} | Desp. {{ $fmtMoney($row['value']) }}</span>
                             </div>
-                            <div class="bar-track"><div class="bar-fill" style="--w:{{ min(100, ($row['value'] / $maxExpense) * 100) }}%; --c:var(--danger);"></div></div>
+                            <div class="bar-track" style="display:flex; height:12px;">
+                                <div style="height:100%; width:{{ min(100, ($row['revenue'] / $maxExpense) * 100) }}%; background:#2563eb;"></div>
+                                <div style="height:100%; width:{{ min(100, ($row['value'] / $maxExpense) * 100) }}%; background:#b42318;"></div>
+                            </div>
                         </div>
                     @empty
                         <p class="subtitle">Nenhuma despesa cadastrada.</p>
@@ -206,7 +209,7 @@
     @if ($dashboardTab === 'vendas')
         <div class="grid stats">
             <div class="card"><div class="metric-label">Meses cadastrados</div><div class="metric-value">{{ count($monthlyRevenueChart) }}</div></div>
-            <div class="card"><div class="metric-label">Maior faturamento</div><div class="metric-value">{{ $fmtMoney($maxRevenue) }}</div></div>
+            <div class="card"><div class="metric-label">Maior fat. fechado</div><div class="metric-value">{{ $fmtMoney($revenueProjection['maxClosedRevenue']) }}</div><p class="subtitle" style="margin-top:6px;">{{ $revenueProjection['closedMonthsCount'] }} meses fechados</p></div>
             <div class="card"><div class="metric-label">Crescimento ultimo mes</div><div class="metric-value" style="color:{{ ($lastRevenueRow['growth'] ?? 0) >= 0 ? 'var(--brand)' : 'var(--danger)' }};">{{ $lastRevenueRow && $lastRevenueRow['growth'] !== null ? (($lastRevenueRow['growth'] ?? 0) >= 0 ? '+' : '') . number_format($lastRevenueRow['growth'], 1, ',', '.') . '%' : '-' }}</div></div>
             <div class="card"><div class="metric-label">Projecao mes atual</div><div class="metric-value">{{ $fmtMoney($revenueProjection['currentMonthProjection']) }}</div></div>
         </div>
@@ -214,7 +217,7 @@
         <div class="grid" style="grid-template-columns:1fr 1fr; margin-bottom:18px;">
             <div class="card"><div class="metric-label">Ticket estimado delivery</div><div class="metric-value">{{ $fmtMoney($deliveryTicket) }}</div></div>
             <div class="card"><div class="metric-label">Ticket estimado balcao</div><div class="metric-value">{{ $fmtMoney($counterTicket) }}</div></div>
-            <div class="card"><div class="metric-label">Crescimento medio</div><div class="metric-value" style="color:{{ $revenueProjection['averageGrowth'] >= 0 ? 'var(--brand)' : 'var(--danger)' }};">{{ $fmtPercent($revenueProjection['averageGrowth']) }}</div></div>
+            <div class="card"><div class="metric-label">Crescimento medio fechado</div><div class="metric-value" style="color:{{ $revenueProjection['averageGrowth'] >= 0 ? 'var(--brand)' : 'var(--danger)' }};">{{ $fmtPercent($revenueProjection['averageGrowth']) }}</div></div>
             <div class="card"><div class="metric-label">Projecao prox. mes</div><div class="metric-value">{{ $fmtMoney($revenueProjection['projectedNextRevenue']) }}</div></div>
         </div>
 
@@ -408,18 +411,11 @@
                     data: {
                         labels: expenses.map((row) => row.label),
                         datasets: [
-                            { type: 'bar', label: 'Despesas', data: expenses.map((row) => row.value), backgroundColor: '#b42318', borderRadius: 4 },
-                            { type: 'line', label: 'Tendencia', data: expenses.map((row) => row.trend), borderColor: '#2563eb', backgroundColor: '#2563eb', tension: .3 },
-                            { type: 'line', label: '% do faturamento', data: expenses.map((row) => row.percent || 0), borderColor: '#b7791f', backgroundColor: '#b7791f', tension: .3, yAxisID: 'percent' }
+                            { label: 'Faturamento', data: expenses.map((row) => row.revenue), backgroundColor: '#2563eb', borderRadius: 4 },
+                            { label: 'Despesas', data: expenses.map((row) => row.value), backgroundColor: '#b42318', borderRadius: 4 }
                         ]
                     },
-                    options: {
-                        ...commonOptions,
-                        scales: {
-                            y: commonOptions.scales.y,
-                            percent: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { callback: (value) => `${value}%` } }
-                        }
-                    }
+                    options: commonOptions
                 });
 
                 const categoryCanvas = document.getElementById('categoryBarChart');
