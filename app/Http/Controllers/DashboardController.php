@@ -83,6 +83,7 @@ class DashboardController extends Controller
             'categoryTotals' => $categoryTotals,
             'monthlyRevenueChart' => $this->monthlyRevenueChart($company),
             'revenueProjection' => $this->revenueProjection($company),
+            'salesPeriodComparisonChart' => $this->salesPeriodComparisonChart($company),
             'weekdayAverageChart' => $this->weekdayAverageChart($company, $dateStart, $dateEnd),
             'channelRevenueChart' => $this->channelRevenueChart($company),
             'monthlyExpenseChart' => $this->monthlyExpenseChart($company),
@@ -312,6 +313,46 @@ class DashboardController extends Controller
                 'count' => $rows->count(),
             ];
         })->all();
+    }
+
+    private function salesPeriodComparisonChart(Company $company): array
+    {
+        $operationalDate = $this->operationalDate($company);
+        $operationalMonth = $operationalDate->copy()->startOfMonth();
+        $yearStart = $operationalMonth->copy()->startOfYear();
+        $sales = $company->dailySales()
+            ->whereBetween('sale_date', [$yearStart->toDateString(), $operationalDate->toDateString()])
+            ->orderBy('sale_date')
+            ->get()
+            ->groupBy(fn ($sale) => $sale->sale_date->format('Y-m'));
+
+        $months = collect();
+
+        foreach ($sales as $monthKey => $rows) {
+            $month = Carbon::createFromFormat('Y-m-d', $monthKey.'-01')->startOfMonth();
+            $periods = [
+                'first' => (float) $rows->filter(fn ($sale) => (int) $sale->sale_date->format('d') <= 10)->sum('amount'),
+                'second' => (float) $rows->filter(fn ($sale) => (int) $sale->sale_date->format('d') >= 11 && (int) $sale->sale_date->format('d') <= 20)->sum('amount'),
+                'third' => (float) $rows->filter(fn ($sale) => (int) $sale->sale_date->format('d') >= 21)->sum('amount'),
+            ];
+
+            $months->push([
+                'label' => $month->format('m/Y'),
+                'sort' => $month->format('Y-m'),
+                'is_current' => $month->equalTo($operationalMonth),
+                'last_day_recorded' => $month->equalTo($operationalMonth) ? (int) $operationalDate->format('d') : $month->daysInMonth,
+                'first' => $periods['first'],
+                'second' => $periods['second'],
+                'third' => $periods['third'],
+                'total' => array_sum($periods),
+            ]);
+        }
+
+        return $months
+            ->filter(fn ($row) => $row['total'] > 0)
+            ->sortByDesc('sort')
+            ->values()
+            ->all();
     }
 
     private function channelRevenueChart(Company $company): array

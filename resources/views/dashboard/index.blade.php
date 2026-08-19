@@ -11,6 +11,7 @@
     $maxChannel = max(collect($channelRevenueChart)->map(fn ($row) => ($row['delivery'] ?? 0) + ($row['counter'] ?? 0))->max() ?? 0, 1);
     $maxExpense = max(collect($monthlyExpenseChart)->map(fn ($row) => max($row['value'] ?? 0, $row['revenue'] ?? 0))->max() ?? 0, 1);
     $maxExpensePercent = max(collect($monthlyExpenseChart)->max('percent') ?? 0, 1);
+    $maxSalesPeriod = max(collect($salesPeriodComparisonChart)->max('total') ?? 0, 1);
     $maxMovementType = max(collect($employeeDashboard['movementTypes'])->max('total') ?? 0, 1);
     $maxEmployeeMovement = max(collect($employeeDashboard['employeeMovementDetails'])->max('total') ?? 0, 1);
     $lastRevenueRow = collect($monthlyRevenueChart)->first();
@@ -221,6 +222,30 @@
             <div class="card"><div class="metric-label">Projecao prox. mes</div><div class="metric-value">{{ $fmtMoney($revenueProjection['projectedNextRevenue']) }}</div></div>
         </div>
 
+        <section class="card" style="margin-bottom:18px;">
+            <h2 class="panel-title">Comparativo do mes por periodo</h2>
+            <p class="subtitle" style="margin-bottom:14px;">Compara os blocos 1-10, 11-20 e 21-fechamento de cada mes. O mes corrente considera ate a ultima venda diaria cadastrada.</p>
+            <div class="chart-box"><canvas id="salesPeriodComparisonChart"></canvas></div>
+            <div class="bar-list">
+                @forelse ($salesPeriodComparisonChart as $row)
+                    <div class="bar-row">
+                        <div class="bar-meta">
+                            <span>{{ $row['label'] }} @if($row['is_current']) <small style="color:var(--brand);">ate dia {{ $row['last_day_recorded'] }}</small> @endif</span>
+                            <span>{{ $fmtMoney($row['total']) }}</span>
+                        </div>
+                        <div class="bar-track" style="display:flex; height:12px;">
+                            <div title="Dias 1 a 10" style="height:100%; width:{{ min(100, ($row['first'] / $maxSalesPeriod) * 100) }}%; background:#2563eb;"></div>
+                            <div title="Dias 11 a 20" style="height:100%; width:{{ min(100, ($row['second'] / $maxSalesPeriod) * 100) }}%; background:#0f766e;"></div>
+                            <div title="Dias 21 ao fim" style="height:100%; width:{{ min(100, ($row['third'] / $maxSalesPeriod) * 100) }}%; background:#b7791f;"></div>
+                        </div>
+                        <div class="subtitle" style="font-size:12px;">1-10: {{ $fmtMoney($row['first']) }} | 11-20: {{ $fmtMoney($row['second']) }} | 21-fech.: {{ $fmtMoney($row['third']) }}</div>
+                    </div>
+                @empty
+                    <p class="subtitle">Cadastre vendas diarias para gerar o comparativo.</p>
+                @endforelse
+            </div>
+        </section>
+
         <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-bottom:18px;">
             <section class="card">
                 <h2 class="panel-title">Faturamento mensal</h2>
@@ -365,6 +390,7 @@
                     scales: { y: { beginAtZero: true, ticks: { callback: money } } }
                 };
                 const revenue = @json($monthlyRevenueChart);
+                const salesPeriods = @json($salesPeriodComparisonChart);
                 const weekdays = @json($weekdayAverageChart);
                 const channels = @json($channelRevenueChart);
                 const expenses = @json($monthlyExpenseChart);
@@ -390,6 +416,20 @@
                     type: 'bar',
                     data: { labels: weekdays.map((row) => row.label), datasets: [{ label: 'Media diaria', data: weekdays.map((row) => row.value), backgroundColor: '#0f766e', borderRadius: 4 }] },
                     options: commonOptions
+                });
+
+                const salesPeriodCanvas = document.getElementById('salesPeriodComparisonChart');
+                if (salesPeriodCanvas) new Chart(salesPeriodCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: salesPeriods.map((row) => row.is_current ? `${row.label} ate dia ${row.last_day_recorded}` : row.label),
+                        datasets: [
+                            { label: 'Dias 1-10', data: salesPeriods.map((row) => row.first), backgroundColor: '#2563eb', borderRadius: 4, stack: 'periods' },
+                            { label: 'Dias 11-20', data: salesPeriods.map((row) => row.second), backgroundColor: '#0f766e', borderRadius: 4, stack: 'periods' },
+                            { label: 'Dias 21-fechamento', data: salesPeriods.map((row) => row.third), backgroundColor: '#b7791f', borderRadius: 4, stack: 'periods' }
+                        ]
+                    },
+                    options: { ...commonOptions, scales: { x: { stacked: true }, y: { ...commonOptions.scales.y, stacked: true } } }
                 });
 
                 const channelCanvas = document.getElementById('channelBarChart');
