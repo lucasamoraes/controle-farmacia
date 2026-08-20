@@ -167,6 +167,7 @@
                 @php
                     $reportsOpen = request()->routeIs('dashboard') || request()->routeIs('resumo.*');
                     $revenueOpen = request()->routeIs('faturamento-mensal.*') || request()->routeIs('imports.vendas-diarias.*');
+                    $quotesOpen = request()->routeIs('listas-compras.*') || request()->routeIs('cotacoes.*') || request()->routeIs('produtos.*');
                     $payablesOpen = request()->routeIs('contas-a-pagar.*') || request()->routeIs('boletos.*') || request()->routeIs('fornecedores.*') || request()->routeIs('funcionarios.*') || request()->routeIs('faturas-cartao.*');
                     $settingsOpen = request()->routeIs('configuracoes.*') || request()->routeIs('imports.boletos.*') || request()->routeIs('usuarios.*');
                 @endphp
@@ -185,6 +186,18 @@
                             <a href="{{ route('faturamento-mensal.index') }}" class="{{ request()->routeIs('faturamento-mensal.*') ? 'active' : '' }}">Faturamento mensal</a>
                             @if (auth()->user()->canWriteFinance($company))
                                 <a href="{{ route('imports.vendas-diarias.create') }}" class="{{ request()->routeIs('imports.vendas-diarias.*') ? 'active' : '' }}">Vendas diarias</a>
+                            @endif
+                        </div>
+                    </details>
+
+                    <details class="nav-group" {{ $quotesOpen ? 'open' : '' }}>
+                        <summary>Cotacoes</summary>
+                        <div class="nav-items">
+                            @if (auth()->user()->canWritePurchaseList($company))
+                                <a href="{{ route('listas-compras.index') }}" class="{{ request()->routeIs('listas-compras.*') ? 'active' : '' }}">Listas de compras</a>
+                            @endif
+                            @if (auth()->user()->canWriteFinance($company))
+                                <a href="{{ route('produtos.index') }}" class="{{ request()->routeIs('produtos.*') ? 'active' : '' }}">Produtos</a>
                             @endif
                         </div>
                     </details>
@@ -220,7 +233,7 @@
                         </div>
                     </details>
                 </nav>
-                <div class="sidebar-footer">{{ auth()->user()->name }}<br>{{ ['owner' => 'Dono', 'finance' => 'Financeiro', 'viewer' => 'Consulta'][auth()->user()->roleForCompany($company)] ?? 'Usuario' }}</div>
+                <div class="sidebar-footer">{{ auth()->user()->name }}<br>{{ ['owner' => 'Dono', 'finance' => 'Financeiro', 'buyer' => 'Balconista', 'viewer' => 'Consulta'][auth()->user()->roleForCompany($company)] ?? 'Usuario' }}</div>
             </aside>
             <main class="main">
                 <header class="topbar">

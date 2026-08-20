@@ -13,6 +13,9 @@ use App\Http\Controllers\FinancialCategoryController;
 use App\Http\Controllers\MonthlyRevenueController;
 use App\Http\Controllers\PayableController;
 use App\Http\Controllers\ProductionInstallController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\PurchaseListController;
+use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\SpreadsheetImportController;
 use App\Http\Controllers\SummaryController;
 use App\Http\Controllers\SupplierController;
@@ -118,6 +121,34 @@ Route::middleware('auth')->group(function () {
         Route::delete('contas-a-pagar/{contas_a_pagar}', [PayableController::class, 'destroy'])->name('contas-a-pagar.destroy');
         Route::patch('contas-a-pagar/{contas_a_pagar}/marcar-paga', [PayableController::class, 'markAsPaid'])->name('payables.mark-paid');
         Route::delete('contas-a-pagar/{contas_a_pagar}/excluir', [PayableController::class, 'delete'])->name('payables.delete');
+    });
+
+    Route::get('produtos', [ProductController::class, 'index'])->name('produtos.index');
+    Route::middleware('company.role:owner,finance')->group(function () {
+        Route::post('produtos', [ProductController::class, 'store'])->name('produtos.store');
+        Route::put('produtos/{produto}', [ProductController::class, 'update'])->name('produtos.update');
+        Route::delete('produtos/{produto}', [ProductController::class, 'destroy'])->name('produtos.destroy');
+        Route::post('produtos/importar', [ProductController::class, 'import'])->name('produtos.import');
+        Route::get('produtos/modelo', [ProductController::class, 'template'])->name('produtos.template');
+    });
+
+    Route::get('listas-compras', [PurchaseListController::class, 'index'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.index');
+    Route::get('listas-compras/create', [PurchaseListController::class, 'create'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.create');
+    Route::post('listas-compras', [PurchaseListController::class, 'store'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.store');
+    Route::get('listas-compras/{lista}', [PurchaseListController::class, 'show'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.show');
+    Route::post('listas-compras/{lista}/itens', [PurchaseListController::class, 'addItem'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.itens.store');
+    Route::delete('listas-compras/itens/{item}', [PurchaseListController::class, 'removeItem'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.itens.destroy');
+
+    Route::middleware('company.role:owner,finance')->group(function () {
+        Route::post('listas-compras/{lista}/cotacao', [QuotationController::class, 'start'])->name('cotacoes.start');
+        Route::get('cotacoes/{cotacao}', [QuotationController::class, 'show'])->name('cotacoes.show');
+        Route::post('cotacoes/{cotacao}/fornecedores', [QuotationController::class, 'addSupplier'])->name('cotacoes.fornecedores.store');
+        Route::put('cotacoes/{cotacao}/precos', [QuotationController::class, 'updatePrices'])->name('cotacoes.precos.update');
+        Route::get('cotacoes/{cotacao}/exportar-lista', [QuotationController::class, 'exportList'])->name('cotacoes.export-list');
+        Route::post('cotacoes/{cotacao}/fornecedores/{fornecedor}/importar-precos', [QuotationController::class, 'importSupplierPrices'])->name('cotacoes.import-prices');
+        Route::get('cotacoes/{cotacao}/fornecedores/{fornecedor}/pedido', [QuotationController::class, 'exportWinnerOrder'])->name('cotacoes.orders.export');
+        Route::get('cotacoes/{cotacao}/fornecedores/{fornecedor}/pedido-pdf', [QuotationController::class, 'printWinnerOrder'])->name('cotacoes.orders.print');
+        Route::patch('cotacoes/{cotacao}/finalizar', [QuotationController::class, 'finalize'])->name('cotacoes.finalize');
     });
 
     Route::get('configuracoes/categorias', [FinancialCategoryController::class, 'index'])->name('configuracoes.categorias.index');

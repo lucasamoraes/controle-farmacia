@@ -57,6 +57,11 @@ class User extends Authenticatable
         return in_array($this->roleForCompany($company), ['owner', 'finance'], true);
     }
 
+    public function canWritePurchaseList(Company $company): bool
+    {
+        return in_array($this->roleForCompany($company), ['owner', 'finance', 'buyer'], true);
+    }
+
     /**
      * Get the attributes that should be cast.
      *

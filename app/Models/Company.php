@@ -85,4 +85,19 @@ class Company extends Model
     {
         return $this->hasMany(BoletoUpload::class);
     }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
+    public function purchaseLists(): HasMany
+    {
+        return $this->hasMany(PurchaseList::class);
+    }
+
+    public function quotations(): HasMany
+    {
+        return $this->hasMany(Quotation::class);
+    }
 }

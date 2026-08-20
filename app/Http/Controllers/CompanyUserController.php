@@ -118,6 +118,7 @@ class CompanyUserController extends Controller
         return [
             'owner' => 'Dono',
             'finance' => 'Financeiro',
+            'buyer' => 'Balconista',
             'viewer' => 'Consulta',
         ];
     }
