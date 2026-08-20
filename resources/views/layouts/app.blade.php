@@ -452,6 +452,21 @@
             });
         });
 
+        document.querySelectorAll('[data-picker-input]').forEach((input) => {
+            const target = document.querySelector(input.dataset.pickerTarget || '');
+            const list = document.getElementById(input.getAttribute('list'));
+            const options = list ? [...list.options] : [];
+            const sync = () => {
+                if (!target) return;
+                const typed = input.value.trim();
+                const found = options.find((option) => option.value === typed);
+                target.value = found ? found.dataset.value || '' : '';
+            };
+            input.addEventListener('input', sync);
+            input.addEventListener('change', sync);
+            sync();
+        });
+
         const dailyAlertDialog = document.querySelector('[data-daily-alert-dialog]');
         const dailyAlertBackdrop = document.querySelector('[data-daily-alert-backdrop]');
         const dailyAlertClose = document.querySelector('[data-daily-alert-close]');

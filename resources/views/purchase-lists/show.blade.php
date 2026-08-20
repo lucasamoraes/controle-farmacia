@@ -39,42 +39,21 @@
 
     @if ($canEditItems)
         <section class="card" style="margin-top:18px;">
-            <h2 class="panel-title">Buscar produto cadastrado</h2>
-            <form method="get" action="{{ route('listas-compras.show', $list) }}">
-                <div class="filter-grid" style="grid-template-columns:minmax(260px,1fr) auto;">
-                    <label>Produto
-                        <input type="search" name="produto" value="{{ $productSearch }}" placeholder="Digite parte do nome do produto">
-                    </label>
-                    <div class="filter-actions">
-                        <button class="btn secondary" type="submit">Buscar</button>
-                        @if ($productSearch !== '' || $selectedClasses !== [])
-                            <a class="btn secondary" href="{{ route('listas-compras.show', $list) }}">Limpar</a>
-                        @endif
-                    </div>
-                </div>
-                <div class="quick-filters" style="margin-top:10px;">
-                    @foreach ($productClasses as $class)
-                        <label class="quick-filter" style="cursor:pointer;">
-                            <input type="checkbox" name="classes[]" value="{{ $class->name }}" @checked(in_array($class->name, $selectedClasses, true)) style="width:auto; min-height:0;">
-                            {{ $class->name }}
-                        </label>
-                    @endforeach
-                </div>
-            </form>
-
+            <h2 class="panel-title">Adicionar produto cadastrado</h2>
             <form method="post" action="{{ route('listas-compras.itens.store', $list) }}" style="margin-top:16px;">
                 @csrf
                 <div class="filter-grid" style="grid-template-columns:minmax(280px,2fr) 120px 120px minmax(180px,1fr) auto;">
                     <label>Produto cadastrado
-                        <select name="product_id" required>
-                            <option value="">Selecione um produto</option>
+                        <input type="search" list="purchase-products-list" data-picker-input data-picker-target="#purchase-product-id" placeholder="Digite para buscar e selecione o produto" required autocomplete="off">
+                        <input type="hidden" name="product_id" id="purchase-product-id">
+                        <datalist id="purchase-products-list">
                             @foreach ($products as $product)
-                                <option value="{{ $product->id }}">{{ $product->description }} | {{ $product->class ?: 'Sem classe' }} | {{ $fmtMoney($product->last_purchase_price) }}</option>
+                                <option value="{{ $product->description }} | {{ $product->class ?: 'Sem classe' }} | {{ $fmtMoney($product->last_purchase_price) }}" data-value="{{ $product->id }}"></option>
                             @endforeach
-                        </select>
+                        </datalist>
                     </label>
                     <label>Qtd
-                        <input type="number" step="0.001" min="0.001" name="quantity" value="1" required>
+                        <input type="number" step="1" min="1" name="quantity" value="1" required>
                     </label>
                     <label>Unidade
                         <input name="unit" value="un" required>
@@ -107,7 +86,7 @@
                         <input type="number" step="0.01" min="0" name="last_purchase_price" value="0">
                     </label>
                     <label>Qtd
-                        <input type="number" step="0.001" min="0.001" name="quantity" value="1" required>
+                        <input type="number" step="1" min="1" name="quantity" value="1" required>
                     </label>
                     <label>Unidade
                         <input name="unit" value="un" required>

@@ -101,10 +101,10 @@ class QuotationController extends Controller
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Produtos');
-        $sheet->fromArray(['Descricao', 'Quantidade', 'Unidade'], null, 'A1');
+        $sheet->fromArray(['Descricao', 'Quantidade', 'Preco'], null, 'A1');
         $row = 2;
         foreach ($cotacao->purchaseList->items()->orderBy('description')->get() as $item) {
-            $sheet->fromArray([$item->description, (float) $item->quantity, $item->unit], null, "A{$row}");
+            $sheet->fromArray([$item->description, (float) $item->quantity, null], null, "A{$row}");
             $row++;
         }
 

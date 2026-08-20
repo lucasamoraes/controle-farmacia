@@ -27,12 +27,15 @@
         <h2 class="panel-title">Fornecedores participantes</h2>
         <form class="actions" method="post" action="{{ route('cotacoes.fornecedores.store', $quotation) }}">
             @csrf
-            <select name="supplier_id" required style="max-width:420px;">
-                <option value="">Adicionar fornecedor de mercadoria</option>
+            <div style="display:grid; gap:6px; min-width:min(520px, 100%);">
+                <input type="search" list="quotation-suppliers-list" data-picker-input data-picker-target="#quotation-supplier-id" placeholder="Digite para buscar fornecedor de mercadoria" required autocomplete="off">
+                <input type="hidden" name="supplier_id" id="quotation-supplier-id">
+                <datalist id="quotation-suppliers-list">
                 @foreach ($availableSuppliers as $supplier)
-                    <option value="{{ $supplier->id }}">{{ $supplier->name }}</option>
+                    <option value="{{ $supplier->name }}" data-value="{{ $supplier->id }}"></option>
                 @endforeach
-            </select>
+                </datalist>
+            </div>
             <button class="btn" type="submit">Adicionar</button>
         </form>
 

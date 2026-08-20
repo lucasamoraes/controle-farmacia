@@ -65,22 +65,16 @@ class PurchaseListController extends Controller
     {
         $this->abortUnlessCompanyList($lista);
         $company = $this->company();
-        $productSearch = trim((string) $request->query('produto', ''));
-        $selectedClasses = array_values(array_filter((array) $request->query('classes', [])));
 
         return view('purchase-lists.show', [
             'company' => $company,
             'list' => $lista->load(['items.product', 'quotation']),
             'products' => $company->products()
                 ->where('is_active', true)
-                ->when($productSearch !== '', fn ($query) => $query->where('description', 'like', "%{$productSearch}%"))
-                ->when($selectedClasses !== [], fn ($query) => $query->whereIn('class', $selectedClasses))
                 ->orderBy('description')
-                ->limit(100)
+                ->limit(2500)
                 ->get(),
             'productClasses' => $company->productClasses()->where('is_active', true)->orderBy('name')->get(),
-            'productSearch' => $productSearch,
-            'selectedClasses' => $selectedClasses,
             'canEditItems' => $lista->status === 'open' && Auth::user()->canWritePurchaseList($company),
             'canManageQuotation' => Auth::user()->canWriteFinance($company),
         ]);

@@ -43,17 +43,18 @@
 <div class="field-grid">
     <label>Fornecedor
         <div style="display:grid; gap:8px;">
-            <div style="display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:8px;">
-                <input type="search" data-supplier-search placeholder="Digite para filtrar fornecedor" autocomplete="off">
-                <button class="btn secondary" type="button" data-supplier-search-button style="min-width:58px;">Lupa</button>
-            </div>
-            <select name="supplier_id" data-supplier-select>
-            <option value="">Sem fornecedor</option>
-            @foreach ($suppliers as $supplier)
-                <option value="{{ $supplier->id }}" data-search="{{ mb_strtolower(($supplier->name ?? '') . ' ' . ($supplier->trade_name ?? '') . ' ' . ($supplier->document ?? '')) }}" @selected((string) old('supplier_id', $payable->supplier_id ?? '') === (string) $supplier->id)>{{ $supplier->name }}</option>
-            @endforeach
-            </select>
-            <span class="subtitle" data-supplier-search-count style="font-size:12px;"></span>
+            @php
+                $selectedSupplierId = (string) old('supplier_id', $payable->supplier_id ?? '');
+                $selectedSupplier = $suppliers->firstWhere('id', (int) $selectedSupplierId);
+            @endphp
+            <input type="search" list="payable-suppliers-list" data-picker-input data-picker-target="#payable-supplier-id" value="{{ $selectedSupplier?->name }}" placeholder="Digite para buscar fornecedor" autocomplete="off">
+            <input type="hidden" name="supplier_id" id="payable-supplier-id" value="{{ $selectedSupplierId }}">
+            <datalist id="payable-suppliers-list">
+                @foreach ($suppliers as $supplier)
+                    <option value="{{ $supplier->name }}" data-value="{{ $supplier->id }}"></option>
+                @endforeach
+            </datalist>
+            <span class="subtitle" style="font-size:12px;">Deixe em branco para conta sem fornecedor.</span>
         </div>
         @error('supplier_id') <span class="error">{{ $message }}</span> @enderror
     </label>
@@ -108,54 +109,6 @@
 </div>
 
 <script>
-    (() => {
-        const input = document.querySelector('[data-supplier-search]');
-        const select = document.querySelector('[data-supplier-select]');
-        const count = document.querySelector('[data-supplier-search-count]');
-        const button = document.querySelector('[data-supplier-search-button]');
-        if (!input || !select) return;
-
-        const normalize = (value) => String(value || '')
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '');
-
-        const filter = () => {
-            const term = normalize(input.value);
-            let visible = 0;
-
-            [...select.options].forEach((option) => {
-                if (!option.value) {
-                    option.hidden = false;
-                    return;
-                }
-
-                const haystack = normalize(option.dataset.search || option.textContent);
-                const match = term === '' || haystack.includes(term);
-                option.hidden = !match;
-                if (match) visible++;
-            });
-
-            const selected = select.options[select.selectedIndex];
-            if (selected && selected.hidden) {
-                select.value = '';
-            }
-
-            if (count) {
-                count.textContent = term === ''
-                    ? `${visible} fornecedor(es) disponivel(is)`
-                    : `${visible} resultado(s) encontrado(s)`;
-            }
-        };
-
-        input.addEventListener('input', filter);
-        button?.addEventListener('click', () => {
-            input.focus();
-            filter();
-        });
-        filter();
-    })();
-
     (() => {
         const checkbox = document.querySelector('[data-toggle-recurring]');
         const fields = document.querySelector('[data-recurring-fields]');
