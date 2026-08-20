@@ -86,6 +86,18 @@ class CompanyUserPermissionsTest extends TestCase
         ]);
     }
 
+    public function test_buyer_can_only_access_purchase_lists(): void
+    {
+        [, $buyer] = $this->companyWithUser('buyer');
+
+        $this->actingAs($buyer)->get('/listas-compras')->assertOk();
+        $this->actingAs($buyer)->get('/dashboard')->assertForbidden();
+        $this->actingAs($buyer)->get('/contas-a-pagar')->assertForbidden();
+        $this->actingAs($buyer)->get('/fornecedores')->assertForbidden();
+        $this->actingAs($buyer)->get('/funcionarios')->assertForbidden();
+        $this->actingAs($buyer)->get('/produtos')->assertForbidden();
+    }
+
     private function companyWithUser(string $role): array
     {
         $company = Company::create([

@@ -33,6 +33,11 @@ class AuthController extends Controller
 
         $request->session()->regenerate();
 
+        $company = Auth::user()?->companies()->first();
+        if ($company && Auth::user()->roleForCompany($company) === 'buyer') {
+            return redirect()->route('listas-compras.index');
+        }
+
         return redirect()->intended(route('dashboard'));
     }
 

@@ -71,9 +71,14 @@ class FinancialAlertService
         }
 
         $expenses = (float) $company->payables()
-            ->whereBetween('due_date', [$monthStart, $monthEnd])
-            ->where('status', '!=', 'cancelled')
-            ->sum('amount');
+            ->leftJoin('financial_categories', 'financial_categories.id', '=', 'payables.financial_category_id')
+            ->whereBetween('payables.due_date', [$monthStart, $monthEnd])
+            ->where('payables.status', '!=', 'cancelled')
+            ->where(function ($query) {
+                $query->where('financial_categories.name', 'like', '%mercadoria%')
+                    ->orWhere('financial_categories.name', 'like', '%estoque%');
+            })
+            ->sum('payables.amount');
 
         $ratio = ($expenses / $previousRevenue) * 100;
         $threshold = $this->threshold($ratio);
@@ -87,7 +92,7 @@ class FinancialAlertService
         return [
             'level' => $level,
             'title' => $threshold >= 55 ? 'Atenção: despesas acima de 55%' : 'Alerta de despesas',
-            'message' => 'As despesas do mes atual chegaram a ' . number_format($ratio, 1, ',', '.') . '% do faturamento do mes anterior.',
+            'message' => 'As compras de mercadorias do mes atual chegaram a ' . number_format($ratio, 1, ',', '.') . '% do faturamento do mes anterior.',
             'ratio' => $ratio,
             'threshold' => $threshold,
         ];

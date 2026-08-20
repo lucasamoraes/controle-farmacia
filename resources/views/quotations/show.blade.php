@@ -51,15 +51,28 @@
     @if ($suppliers->isNotEmpty())
         <section class="card" style="margin-top:18px;">
             <h2 class="panel-title">Importar precos por fornecedor</h2>
-            <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));">
+            <p class="subtitle" style="margin-bottom:12px;">Selecione o fornecedor que enviou a planilha. Colunas esperadas: Descricao e Preco.</p>
+            <form method="post" action="" enctype="multipart/form-data" class="filter-grid" style="grid-template-columns:minmax(260px,1.4fr) minmax(240px,1fr) auto;" data-dynamic-import-form>
+                @csrf
+                <label>Fornecedor
+                    <input type="search" list="quotation-import-suppliers-list" data-picker-input data-picker-target="#quotation-import-supplier-url" placeholder="Digite para buscar fornecedor participante" required autocomplete="off">
+                    <input type="hidden" id="quotation-import-supplier-url" data-url-target>
+                    <datalist id="quotation-import-suppliers-list">
+                        @foreach ($suppliers as $supplier)
+                            <option value="{{ $supplier->name }}" data-value="{{ route('cotacoes.import-prices', [$quotation, $supplier]) }}"></option>
+                        @endforeach
+                    </datalist>
+                </label>
+                <label>Planilha de precos
+                    <input type="file" name="planilha" required>
+                </label>
+                <div class="filter-actions">
+                    <button class="btn secondary" type="submit">Importar precos</button>
+                </div>
+            </form>
+            <div class="actions" style="margin-top:12px;">
                 @foreach ($suppliers as $supplier)
-                    <form method="post" action="{{ route('cotacoes.import-prices', [$quotation, $supplier]) }}" enctype="multipart/form-data" class="card" style="padding:14px;">
-                        @csrf
-                        <strong>{{ $supplier->name }}</strong>
-                        <p class="subtitle" style="margin:6px 0 10px;">Planilha com colunas Descricao e Preco.</p>
-                        <input type="file" name="planilha" required>
-                        <button class="btn secondary" type="submit" style="margin-top:10px;">Importar precos</button>
-                    </form>
+                    <span class="status">{{ $supplier->name }}</span>
                 @endforeach
             </div>
         </section>

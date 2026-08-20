@@ -165,6 +165,8 @@
             <aside class="sidebar" id="app-sidebar">
                 <div class="brand">Controle Farmacia<span>{{ $company->trade_name ?? $company->name ?? 'Financeiro' }}</span></div>
                 @php
+                    $role = auth()->user()->roleForCompany($company);
+                    $isBuyer = $role === 'buyer';
                     $reportsOpen = request()->routeIs('dashboard') || request()->routeIs('resumo.*');
                     $revenueOpen = request()->routeIs('faturamento-mensal.*') || request()->routeIs('imports.vendas-diarias.*');
                     $quotesOpen = request()->routeIs('listas-compras.*') || request()->routeIs('cotacoes.*') || request()->routeIs('produtos.*');
@@ -172,6 +174,7 @@
                     $settingsOpen = request()->routeIs('configuracoes.*') || request()->routeIs('imports.boletos.*') || request()->routeIs('usuarios.*');
                 @endphp
                 <nav class="nav">
+                    @unless ($isBuyer)
                     <details class="nav-group" {{ $reportsOpen ? 'open' : '' }}>
                         <summary>Relatorios</summary>
                         <div class="nav-items">
@@ -179,7 +182,9 @@
                             <a href="{{ route('resumo.index') }}" class="{{ request()->routeIs('resumo.*') ? 'active' : '' }}">Resumo</a>
                         </div>
                     </details>
+                    @endunless
 
+                    @unless ($isBuyer)
                     <details class="nav-group" {{ $revenueOpen ? 'open' : '' }}>
                         <summary>Faturamento</summary>
                         <div class="nav-items">
@@ -189,6 +194,7 @@
                             @endif
                         </div>
                     </details>
+                    @endunless
 
                     <details class="nav-group" {{ $quotesOpen ? 'open' : '' }}>
                         <summary>Cotacoes</summary>
@@ -202,6 +208,7 @@
                         </div>
                     </details>
 
+                    @unless ($isBuyer)
                     <details class="nav-group" {{ $payablesOpen ? 'open' : '' }}>
                         <summary>Contas a pagar</summary>
                         <div class="nav-items">
@@ -214,7 +221,9 @@
                             <a href="{{ route('faturas-cartao.index') }}" class="{{ request()->routeIs('faturas-cartao.*') ? 'active' : '' }}">Faturas cartao</a>
                         </div>
                     </details>
+                    @endunless
 
+                    @unless ($isBuyer)
                     <details class="nav-group" {{ $settingsOpen ? 'open' : '' }}>
                         <summary>Configuracao</summary>
                         <div class="nav-items">
@@ -233,6 +242,7 @@
                             @endif
                         </div>
                     </details>
+                    @endunless
                 </nav>
                 <div class="sidebar-footer">{{ auth()->user()->name }}<br>{{ ['owner' => 'Dono', 'finance' => 'Financeiro', 'buyer' => 'Balconista', 'viewer' => 'Consulta'][auth()->user()->roleForCompany($company)] ?? 'Usuario' }}</div>
             </aside>
@@ -465,6 +475,18 @@
             input.addEventListener('input', sync);
             input.addEventListener('change', sync);
             sync();
+        });
+
+        document.querySelectorAll('[data-dynamic-import-form]').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                const target = form.querySelector('[data-url-target]');
+                if (!target?.value) {
+                    event.preventDefault();
+                    alert('Selecione um fornecedor participante antes de importar.');
+                    return;
+                }
+                form.action = target.value;
+            });
         });
 
         const dailyAlertDialog = document.querySelector('[data-daily-alert-dialog]');

@@ -35,14 +35,14 @@ Route::middleware('guest')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::post('/sair', [AuthController::class, 'logout'])->name('logout');
 
-    Route::get('/dashboard', DashboardController::class)->name('dashboard');
-    Route::get('/resumo', SummaryController::class)->name('resumo.index');
+    Route::get('/dashboard', DashboardController::class)->middleware('company.role:owner,finance,viewer')->name('dashboard');
+    Route::get('/resumo', SummaryController::class)->middleware('company.role:owner,finance,viewer')->name('resumo.index');
     Route::get('/usuarios', [CompanyUserController::class, 'index'])->middleware('company.role:owner')->name('usuarios.index');
     Route::post('/usuarios', [CompanyUserController::class, 'store'])->middleware('company.role:owner')->name('usuarios.store');
     Route::patch('/usuarios/{usuario}', [CompanyUserController::class, 'update'])->middleware('company.role:owner')->name('usuarios.update');
     Route::delete('/usuarios/{usuario}', [CompanyUserController::class, 'destroy'])->middleware('company.role:owner')->name('usuarios.destroy');
 
-    Route::get('faturamento-mensal', [MonthlyRevenueController::class, 'index'])->name('faturamento-mensal.index');
+    Route::get('faturamento-mensal', [MonthlyRevenueController::class, 'index'])->middleware('company.role:owner,finance,viewer')->name('faturamento-mensal.index');
     Route::middleware('company.role:owner,finance')->group(function () {
         Route::get('faturamento-mensal/create', [MonthlyRevenueController::class, 'create'])->name('faturamento-mensal.create');
         Route::post('faturamento-mensal', [MonthlyRevenueController::class, 'store'])->name('faturamento-mensal.store');
@@ -63,7 +63,7 @@ Route::middleware('auth')->group(function () {
         Route::put('importar/vendas-diarias/{venda}', [DailySalesImportController::class, 'update'])->name('imports.vendas-diarias.update');
     });
 
-    Route::get('fornecedores', [SupplierController::class, 'index'])->name('fornecedores.index');
+    Route::get('fornecedores', [SupplierController::class, 'index'])->middleware('company.role:owner,finance,viewer')->name('fornecedores.index');
     Route::middleware('company.role:owner,finance')->group(function () {
         Route::get('fornecedores/create', [SupplierController::class, 'create'])->name('fornecedores.create');
         Route::post('fornecedores', [SupplierController::class, 'store'])->name('fornecedores.store');
@@ -74,7 +74,7 @@ Route::middleware('auth')->group(function () {
         Route::patch('fornecedores/{fornecedore}/reativar', [SupplierController::class, 'restore'])->name('fornecedores.restore');
     });
 
-    Route::get('funcionarios', [EmployeeController::class, 'index'])->name('funcionarios.index');
+    Route::get('funcionarios', [EmployeeController::class, 'index'])->middleware('company.role:owner,finance,viewer')->name('funcionarios.index');
     Route::middleware('company.role:owner,finance')->group(function () {
         Route::get('funcionarios/create', [EmployeeController::class, 'create'])->name('funcionarios.create');
         Route::post('funcionarios', [EmployeeController::class, 'store'])->name('funcionarios.store');
@@ -93,7 +93,7 @@ Route::middleware('auth')->group(function () {
         Route::patch('funcionarios/{funcionario}/reativar', [EmployeeController::class, 'restore'])->name('funcionarios.restore');
     });
 
-    Route::get('faturas-cartao', [CreditCardInvoiceController::class, 'index'])->name('faturas-cartao.index');
+    Route::get('faturas-cartao', [CreditCardInvoiceController::class, 'index'])->middleware('company.role:owner,finance,viewer')->name('faturas-cartao.index');
     Route::middleware('company.role:owner,finance')->group(function () {
         Route::get('faturas-cartao/create', [CreditCardInvoiceController::class, 'create'])->name('faturas-cartao.create');
         Route::post('faturas-cartao', [CreditCardInvoiceController::class, 'store'])->name('faturas-cartao.store');
@@ -112,7 +112,7 @@ Route::middleware('auth')->group(function () {
         Route::post('boletos/{boleto}/confirmar', [BoletoUploadController::class, 'confirm'])->name('boletos.confirm');
     });
 
-    Route::get('contas-a-pagar', [PayableController::class, 'index'])->name('contas-a-pagar.index');
+    Route::get('contas-a-pagar', [PayableController::class, 'index'])->middleware('company.role:owner,finance,viewer')->name('contas-a-pagar.index');
     Route::middleware('company.role:owner,finance')->group(function () {
         Route::get('contas-a-pagar/create', [PayableController::class, 'create'])->name('contas-a-pagar.create');
         Route::post('contas-a-pagar', [PayableController::class, 'store'])->name('contas-a-pagar.store');
@@ -124,7 +124,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('contas-a-pagar/{contas_a_pagar}/excluir', [PayableController::class, 'delete'])->name('payables.delete');
     });
 
-    Route::get('produtos', [ProductController::class, 'index'])->name('produtos.index');
+    Route::get('produtos', [ProductController::class, 'index'])->middleware('company.role:owner,finance,viewer')->name('produtos.index');
     Route::middleware('company.role:owner,finance')->group(function () {
         Route::post('produtos', [ProductController::class, 'store'])->name('produtos.store');
         Route::put('produtos/{produto}', [ProductController::class, 'update'])->name('produtos.update');

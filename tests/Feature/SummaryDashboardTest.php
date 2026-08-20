@@ -133,4 +133,54 @@ class SummaryDashboardTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_expense_ratio_alert_uses_only_merchandise_purchases(): void
+    {
+        Carbon::setTestNow('2026-07-07');
+        $user = User::factory()->create();
+        $company = Company::create(['name' => 'Farmacia Teste']);
+        $company->users()->attach($user->id, ['role' => 'owner']);
+        $merchandise = FinancialCategory::create([
+            'company_id' => $company->id,
+            'name' => 'Compra de mercadoria',
+            'type' => 'expense',
+        ]);
+        $rent = FinancialCategory::create([
+            'company_id' => $company->id,
+            'name' => 'Aluguel',
+            'type' => 'expense',
+        ]);
+
+        $company->monthlyRevenues()->create([
+            'reference_month' => '2026-06-01',
+            'gross_revenue' => 10000,
+            'sales_count' => 200,
+            'average_ticket' => 50,
+        ]);
+        $company->payables()->create([
+            'financial_category_id' => $merchandise->id,
+            'description' => 'Compra estoque',
+            'amount' => 3000,
+            'due_date' => '2026-07-10',
+            'status' => 'open',
+            'source' => 'manual',
+        ]);
+        $company->payables()->create([
+            'financial_category_id' => $rent->id,
+            'description' => 'Aluguel',
+            'amount' => 6000,
+            'due_date' => '2026-07-10',
+            'status' => 'open',
+            'source' => 'manual',
+        ]);
+
+        $this->actingAs($user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('compras de mercadorias')
+            ->assertSee('30,0%')
+            ->assertDontSee('90,0%');
+
+        Carbon::setTestNow();
+    }
 }
