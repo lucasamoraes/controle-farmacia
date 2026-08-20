@@ -73,7 +73,20 @@ class QuotationController extends Controller
         $this->abortUnlessCompanyQuotation($cotacao);
         abort_unless(Auth::user()->canWriteFinance($this->company()), 403);
         $prices = $request->input('prices', []);
+        $quantities = $request->input('quantities', []);
         $selectedWinners = $request->input('selected_winners', []);
+
+        foreach ($quantities as $itemId => $quantity) {
+            $item = $cotacao->purchaseList->items()->whereKey($itemId)->first();
+            if (! $item) {
+                continue;
+            }
+
+            $quantity = (float) str_replace(',', '.', (string) $quantity);
+            if ($quantity > 0) {
+                $item->update(['quantity' => $quantity]);
+            }
+        }
 
         foreach ($prices as $itemId => $supplierPrices) {
             foreach ($supplierPrices as $supplierId => $value) {

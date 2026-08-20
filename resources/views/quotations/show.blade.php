@@ -115,7 +115,12 @@
                                 <br><a href="{{ $item->product->image_url }}" target="_blank" style="color:var(--brand);">imagem</a>
                             @endif
                         </td>
-                        <td>{{ number_format((float) $item->quantity, 3, ',', '.') }} {{ $item->unit }}</td>
+                        <td>
+                            <div style="display:grid; gap:4px; width:92px;">
+                                <input type="number" step="1" min="1" name="quantities[{{ $item->id }}]" value="{{ (float) $item->quantity }}" style="width:92px;">
+                                <span style="color:var(--muted); font-size:12px;">{{ $item->unit }}</span>
+                            </div>
+                        </td>
                         <td>{{ $lastPrice > 0 ? $fmtMoney($lastPrice) : '-' }}</td>
                         @foreach ($suppliers as $supplier)
                             @php

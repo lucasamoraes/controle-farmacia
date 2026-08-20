@@ -137,6 +137,7 @@ Route::middleware('auth')->group(function () {
     Route::get('listas-compras/{lista}', [PurchaseListController::class, 'show'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.show');
     Route::post('listas-compras/{lista}/itens', [PurchaseListController::class, 'addItem'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.itens.store');
     Route::post('listas-compras/{lista}/produtos', [PurchaseListController::class, 'storeProductItem'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.produtos.store');
+    Route::put('listas-compras/itens/{item}', [PurchaseListController::class, 'updateItem'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.itens.update');
     Route::patch('listas-compras/{lista}/status', [PurchaseListController::class, 'updateStatus'])->middleware('company.role:owner,finance')->name('listas-compras.status.update');
     Route::delete('listas-compras/{lista}', [PurchaseListController::class, 'destroy'])->middleware('company.role:owner,finance')->name('listas-compras.destroy');
     Route::delete('listas-compras/itens/{item}', [PurchaseListController::class, 'removeItem'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.itens.destroy');

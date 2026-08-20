@@ -184,6 +184,22 @@ class PurchaseListController extends Controller
         return redirect()->route('listas-compras.show', $list)->with('status', 'Item removido.');
     }
 
+    public function updateItem(Request $request, PurchaseListItem $item): RedirectResponse
+    {
+        $list = $item->purchaseList;
+        $this->abortUnlessCompanyList($list);
+        abort_unless($list->status === 'open' && Auth::user()->canWritePurchaseList($this->company()), 403);
+
+        $data = $request->validate([
+            'quantity' => ['required', 'numeric', 'min:0.001'],
+            'unit' => ['required', 'string', 'max:20'],
+        ]);
+
+        $item->update($data);
+
+        return redirect()->route('listas-compras.show', $list)->with('status', 'Quantidade atualizada.');
+    }
+
     private function abortUnlessCompanyList(PurchaseList $list): void
     {
         abort_unless($list->company_id === $this->company()->id, 404);

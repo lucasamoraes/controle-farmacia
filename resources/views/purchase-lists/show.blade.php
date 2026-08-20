@@ -111,7 +111,18 @@
                 <tr>
                     <td><strong>{{ $item->description }}</strong></td>
                     <td>{{ $item->product?->class ?: '-' }}</td>
-                    <td>{{ number_format((float) $item->quantity, 3, ',', '.') }}</td>
+                    <td>
+                        @if ($canEditItems)
+                            <form method="post" action="{{ route('listas-compras.itens.update', $item) }}" class="actions" data-confirm-message="Deseja atualizar a quantidade deste produto?" data-confirm-button="Salvar">
+                                @csrf @method('PUT')
+                                <input type="number" step="1" min="1" name="quantity" value="{{ (float) $item->quantity }}" style="width:90px;" required>
+                                <input type="hidden" name="unit" value="{{ $item->unit }}">
+                                <button class="btn small secondary" type="submit">Salvar</button>
+                            </form>
+                        @else
+                            {{ number_format((float) $item->quantity, 3, ',', '.') }}
+                        @endif
+                    </td>
                     <td>{{ $item->unit }}</td>
                     <td>{{ $fmtMoney($item->product?->last_purchase_price ?? 0) }}</td>
                     <td>{{ $item->notes ?: '-' }}</td>
