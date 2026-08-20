@@ -53,7 +53,7 @@
                     <form method="post" action="{{ route('cotacoes.import-prices', [$quotation, $supplier]) }}" enctype="multipart/form-data" class="card" style="padding:14px;">
                         @csrf
                         <strong>{{ $supplier->name }}</strong>
-                        <p class="subtitle" style="margin:6px 0 10px;">Planilha com colunas EAN/Descricao e Preco.</p>
+                        <p class="subtitle" style="margin:6px 0 10px;">Planilha com colunas Descricao e Preco.</p>
                         <input type="file" name="planilha" required>
                         <button class="btn secondary" type="submit" style="margin-top:10px;">Importar precos</button>
                     </form>
@@ -70,7 +70,6 @@
                 <thead>
                     <tr>
                         <th>Produto</th>
-                        <th>EAN</th>
                         <th>Qtd</th>
                         <th>Ult. compra</th>
                         @foreach ($suppliers as $supplier)
@@ -92,7 +91,6 @@
                                 <br><a href="{{ $item->product->image_url }}" target="_blank" style="color:var(--brand);">imagem</a>
                             @endif
                         </td>
-                        <td>{{ $item->ean ?: '-' }}</td>
                         <td>{{ number_format((float) $item->quantity, 3, ',', '.') }} {{ $item->unit }}</td>
                         <td>{{ $lastPrice > 0 ? $fmtMoney($lastPrice) : '-' }}</td>
                         @foreach ($suppliers as $supplier)
@@ -123,7 +121,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="{{ 5 + $suppliers->count() }}">Nenhum produto na lista.</td></tr>
+                    <tr><td colspan="{{ 4 + $suppliers->count() }}">Nenhum produto na lista.</td></tr>
                 @endforelse
                 </tbody>
             </table></div>

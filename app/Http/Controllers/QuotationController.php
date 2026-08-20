@@ -101,10 +101,10 @@ class QuotationController extends Controller
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Produtos');
-        $sheet->fromArray(['Descricao', 'EAN', 'Quantidade', 'Unidade'], null, 'A1');
+        $sheet->fromArray(['Descricao', 'Quantidade', 'Unidade'], null, 'A1');
         $row = 2;
         foreach ($cotacao->purchaseList->items()->orderBy('description')->get() as $item) {
-            $sheet->fromArray([$item->description, $item->ean, (float) $item->quantity, $item->unit], null, "A{$row}");
+            $sheet->fromArray([$item->description, (float) $item->quantity, $item->unit], null, "A{$row}");
             $row++;
         }
 
@@ -124,16 +124,13 @@ class QuotationController extends Controller
         $count = 0;
 
         foreach ($rows as $row) {
-            $ean = preg_replace('/\D+/', '', (string) ($row[$map['ean'] ?? ''] ?? ''));
             $description = mb_strtolower(trim((string) ($row[$map['descricao'] ?? ''] ?? '')));
             $price = $this->money($row[$map['preco'] ?? $map['valor'] ?? $map['preco_unitario'] ?? ''] ?? 0);
             if ($price <= 0) {
                 continue;
             }
 
-            $item = $ean !== ''
-                ? $items->firstWhere('ean', $ean)
-                : $items->first(fn ($candidate) => mb_strtolower($candidate->description) === $description);
+            $item = $items->first(fn ($candidate) => mb_strtolower($candidate->description) === $description);
             if (! $item) {
                 continue;
             }
@@ -156,10 +153,10 @@ class QuotationController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Pedido');
         $sheet->fromArray(['Fornecedor', $fornecedor->name, 'Data', now()->format('d/m/Y')], null, 'A1');
-        $sheet->fromArray(['Descricao', 'EAN', 'Quantidade', 'Unidade', 'Valor unitario', 'Total'], null, 'A3');
+        $sheet->fromArray(['Descricao', 'Quantidade', 'Unidade', 'Valor unitario', 'Total'], null, 'A3');
         $line = 4;
         foreach ($rows as $row) {
-            $sheet->fromArray([$row['item']->description, $row['item']->ean, (float) $row['item']->quantity, $row['item']->unit, $row['price'], $row['total']], null, "A{$line}");
+            $sheet->fromArray([$row['item']->description, (float) $row['item']->quantity, $row['item']->unit, $row['price'], $row['total']], null, "A{$line}");
             $line++;
         }
 

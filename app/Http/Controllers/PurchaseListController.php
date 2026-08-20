@@ -61,15 +61,26 @@ class PurchaseListController extends Controller
         return redirect()->route('listas-compras.show', $list)->with('status', 'Lista criada. Agora adicione os produtos em falta.');
     }
 
-    public function show(PurchaseList $lista): View
+    public function show(Request $request, PurchaseList $lista): View
     {
         $this->abortUnlessCompanyList($lista);
         $company = $this->company();
+        $productSearch = trim((string) $request->query('produto', ''));
+        $selectedClasses = array_values(array_filter((array) $request->query('classes', [])));
 
         return view('purchase-lists.show', [
             'company' => $company,
             'list' => $lista->load(['items.product', 'quotation']),
-            'products' => $company->products()->where('is_active', true)->orderBy('description')->limit(800)->get(),
+            'products' => $company->products()
+                ->where('is_active', true)
+                ->when($productSearch !== '', fn ($query) => $query->where('description', 'like', "%{$productSearch}%"))
+                ->when($selectedClasses !== [], fn ($query) => $query->whereIn('class', $selectedClasses))
+                ->orderBy('description')
+                ->limit(100)
+                ->get(),
+            'productClasses' => $company->productClasses()->where('is_active', true)->orderBy('name')->get(),
+            'productSearch' => $productSearch,
+            'selectedClasses' => $selectedClasses,
             'canEditItems' => $lista->status === 'open' && Auth::user()->canWritePurchaseList($company),
             'canManageQuotation' => Auth::user()->canWriteFinance($company),
         ]);
@@ -84,7 +95,6 @@ class PurchaseListController extends Controller
 
         $data = $request->validate([
             'product_id' => ['nullable', 'exists:products,id'],
-            'description' => ['nullable', 'string', 'max:255'],
             'quantity' => ['required', 'numeric', 'min:0.001'],
             'unit' => ['required', 'string', 'max:20'],
             'notes' => ['nullable', 'string'],
@@ -94,21 +104,80 @@ class PurchaseListController extends Controller
             $product = Product::where('company_id', $company->id)->findOrFail($data['product_id']);
         }
 
-        $description = $product?->description ?: trim((string) ($data['description'] ?? ''));
-        if ($description === '') {
-            return back()->withErrors(['description' => 'Selecione um produto ou digite a descricao.'])->withInput();
+        if (! $product) {
+            return back()->withErrors(['product_id' => 'Selecione um produto cadastrado ou cadastre um novo produto.'])->withInput();
         }
 
         $lista->items()->create([
-            'product_id' => $product?->id,
-            'description' => $description,
-            'ean' => $product?->ean,
+            'product_id' => $product->id,
+            'description' => $product->description,
+            'ean' => null,
             'quantity' => $data['quantity'],
             'unit' => $data['unit'],
             'notes' => $data['notes'] ?? null,
         ]);
 
         return redirect()->route('listas-compras.show', $lista)->with('status', 'Produto adicionado a lista.');
+    }
+
+    public function storeProductItem(Request $request, PurchaseList $lista): RedirectResponse
+    {
+        $this->abortUnlessCompanyList($lista);
+        $company = $this->company();
+        abort_unless(Auth::user()->canWritePurchaseList($company), 403);
+        abort_unless($lista->status === 'open', 403);
+
+        $data = $request->validate([
+            'description' => ['required', 'string', 'max:255'],
+            'class' => ['nullable', 'string', 'max:255'],
+            'last_purchase_price' => ['nullable', 'numeric', 'min:0'],
+            'quantity' => ['required', 'numeric', 'min:0.001'],
+            'unit' => ['required', 'string', 'max:20'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $product = $company->products()->create([
+            'description' => $data['description'],
+            'class' => $data['class'] ?? null,
+            'last_purchase_price' => $data['last_purchase_price'] ?? 0,
+            'is_active' => true,
+        ]);
+
+        $lista->items()->create([
+            'product_id' => $product->id,
+            'description' => $product->description,
+            'ean' => null,
+            'quantity' => $data['quantity'],
+            'unit' => $data['unit'],
+            'notes' => $data['notes'] ?? null,
+        ]);
+
+        return redirect()->route('listas-compras.show', $lista)->with('status', 'Produto cadastrado e adicionado a lista.');
+    }
+
+    public function updateStatus(Request $request, PurchaseList $lista): RedirectResponse
+    {
+        $this->abortUnlessCompanyList($lista);
+        $data = $request->validate([
+            'status' => ['required', 'in:open,quoting,finalized'],
+        ]);
+
+        $lista->update([
+            'status' => $data['status'],
+            'started_quotation_at' => $data['status'] === 'quoting' ? ($lista->started_quotation_at ?: now()) : $lista->started_quotation_at,
+            'finalized_at' => $data['status'] === 'finalized' ? now() : null,
+        ]);
+
+        return redirect()->route('listas-compras.show', $lista)->with('status', 'Status da lista atualizado.');
+    }
+
+    public function destroy(PurchaseList $lista): RedirectResponse
+    {
+        $this->abortUnlessCompanyList($lista);
+        abort_unless(Auth::user()->canWriteFinance($this->company()), 403);
+        $lista->delete();
+
+        return redirect()->route('listas-compras.index')->with('status', 'Lista excluida.');
     }
 
     public function removeItem(PurchaseListItem $item): RedirectResponse

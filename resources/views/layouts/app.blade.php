@@ -46,7 +46,7 @@
         .menu-toggle { display:none; border:1px solid var(--line); background:#fff; color:var(--ink); width:40px; height:40px; border-radius:6px; font-size:22px; line-height:1; cursor:pointer; }
         .sidebar-toggle { border:1px solid var(--line); background:#fff; color:var(--ink); width:40px; height:40px; border-radius:6px; font-size:18px; cursor:pointer; }
         .install-btn { display:none; }
-        .content { padding:28px; max-width:1180px; overflow:hidden; }
+        .content { padding:28px; width:100%; max-width:none; overflow:hidden; }
         .title { margin:0 0 4px; font-size:24px; }
         .subtitle { margin:0; color:var(--muted); }
         .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; min-width:0; }
@@ -222,6 +222,7 @@
                             <a href="{{ route('configuracoes.categorias.index') }}" class="{{ request()->routeIs('configuracoes.categorias.*') ? 'active' : '' }}">Categorias</a>
                             @if (auth()->user()->canWriteFinance($company))
                                 <a href="{{ route('configuracoes.cartoes.index') }}" class="{{ request()->routeIs('configuracoes.cartoes.*') ? 'active' : '' }}">Cartoes</a>
+                                <a href="{{ route('configuracoes.classes-produtos.index') }}" class="{{ request()->routeIs('configuracoes.classes-produtos.*') ? 'active' : '' }}">Classes produtos</a>
                                 <a href="{{ route('configuracoes.funcionarios.index') }}" class="{{ request()->routeIs('configuracoes.funcionarios.*') ? 'active' : '' }}">Funcionarios</a>
                             @endif
                             @if (auth()->user()->canWriteFinance($company))

@@ -22,18 +22,17 @@
     <p><strong>Cotacao:</strong> #{{ $quotation->id }} | <strong>Data:</strong> {{ now()->format('d/m/Y') }}</p>
 
     <table>
-        <thead><tr><th>Produto</th><th>EAN</th><th>Quantidade</th><th>Valor unitario</th><th>Total</th></tr></thead>
+        <thead><tr><th>Produto</th><th>Quantidade</th><th>Valor unitario</th><th>Total</th></tr></thead>
         <tbody>
         @forelse ($rows as $row)
             <tr>
                 <td>{{ $row['item']->description }}</td>
-                <td>{{ $row['item']->ean ?: '-' }}</td>
                 <td>{{ number_format((float) $row['item']->quantity, 3, ',', '.') }} {{ $row['item']->unit }}</td>
                 <td>R$ {{ number_format($row['price'], 2, ',', '.') }}</td>
                 <td>R$ {{ number_format($row['total'], 2, ',', '.') }}</td>
             </tr>
         @empty
-            <tr><td colspan="5">Nenhum item vencedor para este fornecedor.</td></tr>
+            <tr><td colspan="4">Nenhum item vencedor para este fornecedor.</td></tr>
         @endforelse
         </tbody>
     </table>

@@ -91,6 +91,11 @@ class Company extends Model
         return $this->hasMany(Product::class);
     }
 
+    public function productClasses(): HasMany
+    {
+        return $this->hasMany(ProductClass::class);
+    }
+
     public function purchaseLists(): HasMany
     {
         return $this->hasMany(PurchaseList::class);

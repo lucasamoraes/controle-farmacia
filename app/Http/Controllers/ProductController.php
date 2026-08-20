@@ -19,19 +19,21 @@ class ProductController extends Controller
     {
         $company = $this->company();
         $search = trim((string) $request->query('busca', ''));
+        $selectedClasses = array_values(array_filter((array) $request->query('classes', [])));
 
         return view('products.index', [
             'company' => $company,
             'search' => $search,
+            'selectedClasses' => $selectedClasses,
+            'productClasses' => $company->productClasses()->where('is_active', true)->orderBy('name')->get(),
             'products' => $company->products()
                 ->when($search !== '', function ($query) use ($search) {
                     $query->where(function ($inner) use ($search) {
                         $inner->where('description', 'like', "%{$search}%")
-                            ->orWhere('ean', 'like', "%{$search}%")
-                            ->orWhere('group', 'like', "%{$search}%")
                             ->orWhere('class', 'like', "%{$search}%");
                     });
                 })
+                ->when($selectedClasses !== [], fn ($query) => $query->whereIn('class', $selectedClasses))
                 ->orderBy('description')
                 ->paginate(20)
                 ->withQueryString(),
@@ -45,11 +47,7 @@ class ProductController extends Controller
         $data['company_id'] = $company->id;
         $data['is_active'] = true;
 
-        if (! empty($data['ean'])) {
-            $company->products()->updateOrCreate(['ean' => $data['ean']], $data);
-        } else {
-            $company->products()->create($data);
-        }
+        $company->products()->create($data);
 
         return redirect()->route('produtos.index')->with('status', 'Produto salvo.');
     }
@@ -120,11 +118,8 @@ class ProductController extends Controller
     {
         return $request->validate([
             'description' => ['required', 'string', 'max:255'],
-            'ean' => ['nullable', 'string', 'max:50'],
-            'group' => ['nullable', 'string', 'max:255'],
             'class' => ['nullable', 'string', 'max:255'],
             'last_purchase_price' => ['nullable', 'numeric', 'min:0'],
-            'image_url' => ['nullable', 'url', 'max:500'],
         ]);
     }
 

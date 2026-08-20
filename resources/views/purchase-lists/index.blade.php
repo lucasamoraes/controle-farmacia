@@ -43,7 +43,17 @@
                     <td>{{ $list->items_count }}</td>
                     <td>{{ $list->creator?->name ?: '-' }}</td>
                     <td>{{ $list->created_at->format('d/m/Y') }}</td>
-                    <td><a class="btn small secondary" href="{{ route('listas-compras.show', $list) }}">Abrir</a></td>
+                    <td>
+                        <div class="actions">
+                            <a class="btn small secondary" href="{{ route('listas-compras.show', $list) }}">Abrir</a>
+                            @if (auth()->user()->canWriteFinance($company))
+                                <form method="post" action="{{ route('listas-compras.destroy', $list) }}" data-confirm-message="Deseja excluir esta lista? Os itens e a cotacao ligada a ela tambem serao removidos." data-confirm-button="Excluir" data-confirm-danger="1">
+                                    @csrf @method('DELETE')
+                                    <button class="btn small danger" type="submit">Excluir</button>
+                                </form>
+                            @endif
+                        </div>
+                    </td>
                 </tr>
             @empty
                 <tr><td colspan="6">Nenhuma lista cadastrada.</td></tr>

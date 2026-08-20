@@ -14,6 +14,7 @@ use App\Http\Controllers\MonthlyRevenueController;
 use App\Http\Controllers\PayableController;
 use App\Http\Controllers\ProductionInstallController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductClassController;
 use App\Http\Controllers\PurchaseListController;
 use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\SpreadsheetImportController;
@@ -128,8 +129,6 @@ Route::middleware('auth')->group(function () {
         Route::post('produtos', [ProductController::class, 'store'])->name('produtos.store');
         Route::put('produtos/{produto}', [ProductController::class, 'update'])->name('produtos.update');
         Route::delete('produtos/{produto}', [ProductController::class, 'destroy'])->name('produtos.destroy');
-        Route::post('produtos/importar', [ProductController::class, 'import'])->name('produtos.import');
-        Route::get('produtos/modelo', [ProductController::class, 'template'])->name('produtos.template');
     });
 
     Route::get('listas-compras', [PurchaseListController::class, 'index'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.index');
@@ -137,6 +136,9 @@ Route::middleware('auth')->group(function () {
     Route::post('listas-compras', [PurchaseListController::class, 'store'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.store');
     Route::get('listas-compras/{lista}', [PurchaseListController::class, 'show'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.show');
     Route::post('listas-compras/{lista}/itens', [PurchaseListController::class, 'addItem'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.itens.store');
+    Route::post('listas-compras/{lista}/produtos', [PurchaseListController::class, 'storeProductItem'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.produtos.store');
+    Route::patch('listas-compras/{lista}/status', [PurchaseListController::class, 'updateStatus'])->middleware('company.role:owner,finance')->name('listas-compras.status.update');
+    Route::delete('listas-compras/{lista}', [PurchaseListController::class, 'destroy'])->middleware('company.role:owner,finance')->name('listas-compras.destroy');
     Route::delete('listas-compras/itens/{item}', [PurchaseListController::class, 'removeItem'])->middleware('company.role:owner,finance,buyer')->name('listas-compras.itens.destroy');
 
     Route::middleware('company.role:owner,finance')->group(function () {
@@ -160,6 +162,10 @@ Route::middleware('auth')->group(function () {
         Route::post('configuracoes/cartoes', [CreditCardController::class, 'store'])->name('configuracoes.cartoes.store');
         Route::put('configuracoes/cartoes/{cartao}', [CreditCardController::class, 'update'])->name('configuracoes.cartoes.update');
         Route::delete('configuracoes/cartoes/{cartao}', [CreditCardController::class, 'destroy'])->name('configuracoes.cartoes.destroy');
+        Route::get('configuracoes/classes-produtos', [ProductClassController::class, 'index'])->name('configuracoes.classes-produtos.index');
+        Route::post('configuracoes/classes-produtos', [ProductClassController::class, 'store'])->name('configuracoes.classes-produtos.store');
+        Route::put('configuracoes/classes-produtos/{classe}', [ProductClassController::class, 'update'])->name('configuracoes.classes-produtos.update');
+        Route::delete('configuracoes/classes-produtos/{classe}', [ProductClassController::class, 'destroy'])->name('configuracoes.classes-produtos.destroy');
         Route::get('configuracoes/funcionarios', [EmployeeReferenceController::class, 'index'])->name('configuracoes.funcionarios.index');
         Route::post('configuracoes/funcionarios/cargos', [EmployeeReferenceController::class, 'storePosition'])->name('configuracoes.funcionarios.cargos.store');
         Route::put('configuracoes/funcionarios/cargos/{cargo}', [EmployeeReferenceController::class, 'updatePosition'])->name('configuracoes.funcionarios.cargos.update');
