@@ -89,7 +89,15 @@
                         <th>Qtd</th>
                         <th>Ult. compra</th>
                         @foreach ($suppliers as $supplier)
-                            <th>{{ $supplier->name }}</th>
+                            <th>
+                                <div style="display:grid; gap:6px;">
+                                    <span>{{ $supplier->name }}</span>
+                                    <span class="actions">
+                                        <a class="btn small secondary" href="{{ route('cotacoes.orders.export', [$quotation, $supplier]) }}">Excel</a>
+                                        <a class="btn small secondary" href="{{ route('cotacoes.orders.print', [$quotation, $supplier]) }}" target="_blank">PDF</a>
+                                    </span>
+                                </div>
+                            </th>
                         @endforeach
                         <th>Vencedor</th>
                     </tr>
@@ -147,23 +155,5 @@
                 </div>
             @endif
         </form>
-    </section>
-
-    <section class="card" style="margin-top:18px;">
-        <h2 class="panel-title">Pedidos por fornecedor vencedor</h2>
-        <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));">
-            @forelse ($suppliers as $supplier)
-                <div class="card" style="padding:14px;">
-                    <strong>{{ $supplier->name }}</strong>
-                    <p class="subtitle" style="margin-top:6px;">Exporta apenas produtos vencidos por este fornecedor.</p>
-                    <div class="actions" style="margin-top:10px;">
-                        <a class="btn small secondary" href="{{ route('cotacoes.orders.export', [$quotation, $supplier]) }}">Excel</a>
-                        <a class="btn small secondary" href="{{ route('cotacoes.orders.print', [$quotation, $supplier]) }}" target="_blank">PDF/Imprimir</a>
-                    </div>
-                </div>
-            @empty
-                <p class="subtitle">Adicione fornecedores e precos para gerar pedidos.</p>
-            @endforelse
-        </div>
     </section>
 @endsection
