@@ -73,6 +73,7 @@ class QuotationController extends Controller
         $this->abortUnlessCompanyQuotation($cotacao);
         abort_unless(Auth::user()->canWriteFinance($this->company()), 403);
         $prices = $request->input('prices', []);
+        $selectedWinners = $request->input('selected_winners', []);
 
         foreach ($prices as $itemId => $supplierPrices) {
             foreach ($supplierPrices as $supplierId => $value) {
@@ -88,8 +89,20 @@ class QuotationController extends Controller
                 $cotacao->prices()->updateOrCreate([
                     'purchase_list_item_id' => $itemId,
                     'supplier_id' => $supplierId,
-                ], ['unit_price' => $value]);
+                ], [
+                    'unit_price' => $value,
+                    'is_selected_winner' => (string) ($selectedWinners[$itemId] ?? '') === (string) $supplierId,
+                ]);
             }
+
+            if (! array_key_exists($itemId, $selectedWinners)) {
+                continue;
+            }
+
+            $cotacao->prices()
+                ->where('purchase_list_item_id', $itemId)
+                ->where('supplier_id', '!=', $selectedWinners[$itemId])
+                ->update(['is_selected_winner' => false]);
         }
 
         return redirect()->route('cotacoes.show', $cotacao)->with('status', 'Precos atualizados.');
@@ -199,16 +212,21 @@ class QuotationController extends Controller
         $winners = [];
 
         foreach ($quotation->purchaseList->items as $item) {
-            $winner = collect($prices[$item->id] ?? [])
+            $availablePrices = collect($prices[$item->id] ?? [])
                 ->filter(fn ($price) => (float) $price->unit_price > 0)
-                ->sortBy('unit_price')
-                ->first();
+                ->sortBy('unit_price');
+            $lowest = $availablePrices->first();
+            $selected = $availablePrices->first(fn ($price) => (bool) $price->is_selected_winner);
+            $winner = $selected ?: $lowest;
             if ($winner) {
                 $last = (float) ($item->product?->last_purchase_price ?? 0);
                 $unit = (float) $winner->unit_price;
                 $winners[$item->id] = [
                     'supplier_id' => $winner->supplier_id,
                     'unit_price' => $unit,
+                    'lowest_supplier_id' => $lowest?->supplier_id,
+                    'lowest_unit_price' => $lowest ? (float) $lowest->unit_price : null,
+                    'manual' => (bool) $selected,
                     'variation' => $last > 0 ? (($unit - $last) / $last) * 100 : null,
                 ];
             }

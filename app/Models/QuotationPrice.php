@@ -12,10 +12,12 @@ class QuotationPrice extends Model
         'purchase_list_item_id',
         'supplier_id',
         'unit_price',
+        'is_selected_winner',
     ];
 
     protected $casts = [
         'unit_price' => 'decimal:2',
+        'is_selected_winner' => 'boolean',
     ];
 
     public function quotation(): BelongsTo

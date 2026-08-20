@@ -120,12 +120,22 @@
                         @foreach ($suppliers as $supplier)
                             @php
                                 $price = $matrix[$item->id][$supplier->id]->unit_price ?? null;
+                                $isLowest = $winner && (int) ($winner['lowest_supplier_id'] ?? 0) === (int) $supplier->id;
                                 $isWinner = $winner && (int) $winner['supplier_id'] === (int) $supplier->id;
                             @endphp
                             <td style="{{ $isWinner ? 'background:#ecfdf5;' : '' }}">
                                 <input type="number" step="0.01" min="0" name="prices[{{ $item->id }}][{{ $supplier->id }}]" value="{{ $price }}" style="width:120px;">
+                                @if ($price)
+                                    <label style="display:flex; align-items:center; gap:6px; margin-top:7px; font-size:12px; font-weight:700;">
+                                        <input type="radio" name="selected_winners[{{ $item->id }}]" value="{{ $supplier->id }}" @checked($isWinner) style="width:auto; min-height:0;">
+                                        Escolher
+                                    </label>
+                                @endif
+                                @if ($isLowest && ! $isWinner)
+                                    <div class="status" style="margin-top:6px;">Menor preco</div>
+                                @endif
                                 @if ($isWinner)
-                                    <div class="status paid" style="margin-top:6px;">Menor preco</div>
+                                    <div class="status paid" style="margin-top:6px;">Selecionado</div>
                                 @endif
                             </td>
                         @endforeach
@@ -134,6 +144,10 @@
                                 @php $variation = $winner['variation']; @endphp
                                 <strong>{{ $suppliers->firstWhere('id', $winner['supplier_id'])?->name }}</strong><br>
                                 {{ $fmtMoney($winner['unit_price']) }}
+                                @if ($winner['manual'] && (int) $winner['supplier_id'] !== (int) ($winner['lowest_supplier_id'] ?? 0))
+                                    <div class="status" style="margin-top:6px;">Escolha manual</div>
+                                    <div style="color:var(--muted); font-size:12px; margin-top:4px;">Menor: {{ $fmtMoney($winner['lowest_unit_price']) }}</div>
+                                @endif
                                 @if ($variation !== null)
                                     <div style="color:{{ $variation > 0 ? 'var(--danger)' : 'var(--brand)' }}; font-weight:700;">
                                         {{ $variation > 0 ? '+' : '' }}{{ $fmtPercent($variation) }} vs ult. compra
