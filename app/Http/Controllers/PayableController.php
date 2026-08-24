@@ -84,12 +84,15 @@ class PayableController extends Controller
         return redirect()->route('contas-a-pagar.index')->with('status', $created > 1 ? "{$created} contas recorrentes criadas." : 'Conta a pagar criada.');
     }
 
-    public function edit(Payable $contas_a_pagar): View
+    public function edit(Request $request, Payable $contas_a_pagar): View
     {
         $company = $this->company();
         abort_unless($contas_a_pagar->company_id === $company->id, 404);
 
-        return view('payables.edit', $this->formData() + ['payable' => $contas_a_pagar]);
+        return view('payables.edit', $this->formData() + [
+            'payable' => $contas_a_pagar,
+            'returnUrl' => $this->safeReturnUrl($request),
+        ]);
     }
 
     public function update(Request $request, Payable $contas_a_pagar): RedirectResponse
@@ -106,30 +109,30 @@ class PayableController extends Controller
 
         $contas_a_pagar->update($data);
 
-        return redirect()->route('contas-a-pagar.index')->with('status', 'Conta a pagar atualizada.');
+        return $this->redirectToReturnUrl($request)->with('status', 'Conta a pagar atualizada.');
     }
 
-    public function destroy(Payable $contas_a_pagar): RedirectResponse
+    public function destroy(Request $request, Payable $contas_a_pagar): RedirectResponse
     {
         $company = $this->company();
         abort_unless($contas_a_pagar->company_id === $company->id, 404);
 
         $contas_a_pagar->update(['status' => 'cancelled']);
 
-        return redirect()->route('contas-a-pagar.index')->with('status', 'Conta cancelada.');
+        return $this->redirectToReturnUrl($request)->with('status', 'Conta cancelada.');
     }
 
-    public function delete(Payable $contas_a_pagar): RedirectResponse
+    public function delete(Request $request, Payable $contas_a_pagar): RedirectResponse
     {
         $company = $this->company();
         abort_unless($contas_a_pagar->company_id === $company->id, 404);
 
         $contas_a_pagar->delete();
 
-        return redirect()->route('contas-a-pagar.index')->with('status', 'Conta excluida.');
+        return $this->redirectToReturnUrl($request)->with('status', 'Conta excluida.');
     }
 
-    public function markAsPaid(Payable $contas_a_pagar): RedirectResponse
+    public function markAsPaid(Request $request, Payable $contas_a_pagar): RedirectResponse
     {
         $company = $this->company();
         abort_unless($contas_a_pagar->company_id === $company->id, 404);
@@ -139,7 +142,22 @@ class PayableController extends Controller
             'paid_at' => now()->toDateString(),
         ]);
 
-        return redirect()->route('contas-a-pagar.index')->with('status', 'Conta marcada como paga.');
+        return $this->redirectToReturnUrl($request)->with('status', 'Conta marcada como paga.');
+    }
+
+    private function redirectToReturnUrl(Request $request): RedirectResponse
+    {
+        return redirect()->to($this->safeReturnUrl($request));
+    }
+
+    private function safeReturnUrl(Request $request): string
+    {
+        $returnUrl = (string) $request->input('return_url', '');
+        if ($returnUrl !== '' && (str_starts_with($returnUrl, url('/')) || str_starts_with($returnUrl, '/'))) {
+            return $returnUrl;
+        }
+
+        return route('contas-a-pagar.index');
     }
 
     private function validated(Request $request): array

@@ -1,4 +1,7 @@
 <div class="field-grid">
+    @if (! empty($returnUrl))
+        <input type="hidden" name="return_url" value="{{ $returnUrl }}">
+    @endif
     <label>Descricao
         <input name="description" value="{{ old('description', $payable->description ?? '') }}" required>
         @error('description') <span class="error">{{ $message }}</span> @enderror
@@ -105,7 +108,7 @@
 
 <div class="actions">
     <button class="btn" type="submit">Salvar conta</button>
-    <a class="btn secondary" href="{{ route('contas-a-pagar.index') }}">Cancelar</a>
+    <a class="btn secondary" href="{{ $returnUrl ?? route('contas-a-pagar.index') }}">Cancelar</a>
 </div>
 
 <script>

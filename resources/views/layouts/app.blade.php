@@ -489,6 +489,14 @@
             });
         });
 
+        document.querySelectorAll('[data-auto-submit-input]').forEach((input) => {
+            input.addEventListener('change', () => {
+                if (input.checkValidity()) {
+                    input.closest('form')?.submit();
+                }
+            });
+        });
+
         const dailyAlertDialog = document.querySelector('[data-daily-alert-dialog]');
         const dailyAlertBackdrop = document.querySelector('[data-daily-alert-backdrop]');
         const dailyAlertClose = document.querySelector('[data-daily-alert-close]');

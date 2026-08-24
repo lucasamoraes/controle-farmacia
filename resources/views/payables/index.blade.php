@@ -16,6 +16,7 @@
     </div>
 
     @php
+        $returnUrl = request()->fullUrl();
         $baseFilters = array_filter([
             'busca' => $search,
             'status' => $statusFilter,
@@ -112,17 +113,19 @@
                         @if ($payable->status === 'open')
                             <button class="btn small" type="button" data-pay-modal data-pay-url="{{ route('payables.mark-paid', $payable) }}" data-line="{{ $payable->digitable_line }}" data-description="{{ $payable->description }}" data-amount="R$ {{ number_format($payable->amount, 2, ',', '.') }}">Pagar</button>
                         @endif
-                        <a class="btn small secondary" href="{{ route('contas-a-pagar.edit', $payable) }}">Editar</a>
+                        <a class="btn small secondary" href="{{ route('contas-a-pagar.edit', ['contas_a_pagar' => $payable, 'return_url' => $returnUrl]) }}">Editar</a>
                         @if ($payable->status !== 'cancelled')
                             <form method="post" action="{{ route('contas-a-pagar.destroy', $payable) }}" data-confirm-title="Cancelar conta" data-confirm-message="Deseja cancelar esta conta a pagar? Ela sairá dos totais ativos, mas continuará no histórico." data-confirm-button="Cancelar conta" data-confirm-danger="1">
                                 @csrf
                                 @method('delete')
+                                <input type="hidden" name="return_url" value="{{ $returnUrl }}">
                                 <button class="btn small danger" type="submit">Cancelar</button>
                             </form>
                         @endif
                         <form method="post" action="{{ route('payables.delete', $payable) }}" data-confirm-title="Excluir conta" data-confirm-message="Deseja excluir definitivamente esta conta? Esta ação não pode ser desfeita." data-confirm-button="Excluir conta" data-confirm-danger="1">
                             @csrf
                             @method('delete')
+                            <input type="hidden" name="return_url" value="{{ $returnUrl }}">
                             <button class="btn small secondary" type="submit">Excluir</button>
                         </form>
                         @endif
@@ -154,6 +157,7 @@
                 <form method="post" data-pay-form>
                     @csrf
                     @method('patch')
+                    <input type="hidden" name="return_url" value="{{ $returnUrl }}">
                     <button class="btn" type="submit">Marcar como pago</button>
                 </form>
             </div>
