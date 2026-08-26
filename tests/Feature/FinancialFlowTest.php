@@ -14,21 +14,22 @@ class FinancialFlowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_user_can_register_company_and_create_financial_records(): void
+    public function test_user_can_create_financial_records(): void
     {
-        $this->post('/cadastro', [
-            'name' => 'Lucas',
-            'email' => 'lucas@example.com',
-            'password' => 'secret123',
-            'password_confirmation' => 'secret123',
-            'company_name' => 'Farmacia Modelo',
-            'company_document' => '12345678000199',
-        ])->assertRedirect('/dashboard');
+        $user = User::factory()->create();
+        $company = Company::create([
+            'name' => 'Farmacia Modelo',
+            'trade_name' => 'Farmacia Modelo',
+            'document' => '12345678000199',
+        ]);
+        $company->users()->attach($user->id, ['role' => 'owner']);
+        $category = FinancialCategory::create([
+            'company_id' => $company->id,
+            'name' => 'Compra de mercadoria',
+            'type' => 'expense',
+        ]);
 
-        $company = Company::first();
-        $category = FinancialCategory::where('company_id', $company->id)->where('type', 'expense')->first();
-
-        $this->post('/fornecedores', [
+        $this->actingAs($user)->post('/fornecedores', [
             'name' => 'Distribuidora Teste',
             'document' => '11222333000144',
             'financial_category_id' => $category->id,

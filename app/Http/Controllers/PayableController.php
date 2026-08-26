@@ -153,7 +153,20 @@ class PayableController extends Controller
     private function safeReturnUrl(Request $request): string
     {
         $returnUrl = (string) $request->input('return_url', '');
-        if ($returnUrl !== '' && (str_starts_with($returnUrl, url('/')) || str_starts_with($returnUrl, '/'))) {
+        if ($returnUrl === '' || str_starts_with($returnUrl, '//')) {
+            return route('contas-a-pagar.index');
+        }
+
+        if (str_starts_with($returnUrl, '/')) {
+            return $returnUrl;
+        }
+
+        $appUrl = parse_url(url('/'));
+        $targetUrl = parse_url($returnUrl);
+        if (
+            ($targetUrl['scheme'] ?? null) === ($appUrl['scheme'] ?? null)
+            && ($targetUrl['host'] ?? null) === ($appUrl['host'] ?? null)
+        ) {
             return $returnUrl;
         }
 

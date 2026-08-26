@@ -21,8 +21,12 @@
             <input type="checkbox" name="remember" value="1" style="width:auto;"> Lembrar acesso
         </label>
 
-        <div class="actions" style="margin-top:20px; justify-content:space-between;">
-            <a href="{{ route('register') }}">Criar conta</a>
+        <label style="margin-top:14px;">Codigo de seguranca: {{ $captchaQuestion }}
+            <input type="text" name="captcha" inputmode="numeric" autocomplete="off" required>
+            @error('captcha') <span class="error">{{ $message }}</span> @enderror
+        </label>
+
+        <div class="actions" style="margin-top:20px; justify-content:flex-end;">
             <button class="btn" type="submit">Entrar</button>
         </div>
     </form>

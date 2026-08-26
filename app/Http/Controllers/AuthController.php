@@ -3,35 +3,60 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
-use App\Models\FinancialCategory;
-use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AuthController extends Controller
 {
-    public function showLogin(): View
+    public function showLogin(Request $request): View
     {
-        return view('auth.login');
+        return view('auth.login', [
+            'captchaQuestion' => $this->refreshLoginCaptcha($request),
+        ]);
     }
 
     public function login(Request $request): RedirectResponse
     {
-        $credentials = $request->validate([
+        $data = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required'],
+            'captcha' => ['required', 'string'],
         ]);
+        $credentials = [
+            'email' => $data['email'],
+            'password' => $data['password'],
+        ];
 
-        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
-            return back()->withErrors([
-                'email' => 'E-mail ou senha invalidos.',
-            ])->onlyInput('email');
+        $this->ensureLoginIsNotThrottled($request);
+
+        $captchaAnswer = (string) $request->session()->pull('login_captcha_answer', '');
+        if (! hash_equals($captchaAnswer, trim((string) $data['captcha']))) {
+            RateLimiter::hit($this->throttleKey($request), 60);
+            $this->refreshLoginCaptcha($request);
+
+            throw ValidationException::withMessages([
+                'captcha' => 'Codigo de seguranca invalido.',
+            ]);
         }
 
+        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
+            RateLimiter::hit($this->throttleKey($request), 60);
+            $this->refreshLoginCaptcha($request);
+
+            throw ValidationException::withMessages([
+                'email' => 'E-mail ou senha invalidos.',
+            ]);
+        }
+
+        RateLimiter::clear($this->throttleKey($request));
+
         $request->session()->regenerate();
+        $request->session()->forget('login_captcha_answer');
 
         $company = Auth::user()?->companies()->first();
         if ($company && Auth::user()->roleForCompany($company) === 'buyer') {
@@ -43,38 +68,12 @@ class AuthController extends Controller
 
     public function showRegister(): View
     {
-        return view('auth.register');
+        abort(404);
     }
 
     public function register(Request $request): RedirectResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'],
-            'company_name' => ['required', 'string', 'max:255'],
-            'company_document' => ['nullable', 'string', 'max:20'],
-        ]);
-
-        $user = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-        ]);
-
-        $company = Company::create([
-            'name' => $data['company_name'],
-            'trade_name' => $data['company_name'],
-            'document' => $data['company_document'] ?? null,
-        ]);
-
-        $company->users()->attach($user->id, ['role' => 'owner']);
-        $this->seedDefaultCategories($company);
-
-        Auth::login($user);
-        $request->session()->regenerate();
-
-        return redirect()->route('dashboard')->with('status', 'Conta criada com sucesso.');
+        abort(404);
     }
 
     public function logout(Request $request): RedirectResponse
@@ -104,5 +103,31 @@ class AuthController extends Controller
         foreach ($categories as $category) {
             $company->categories()->create($category + ['is_default' => true]);
         }
+    }
+
+    private function refreshLoginCaptcha(Request $request): string
+    {
+        $left = random_int(2, 9);
+        $right = random_int(1, 9);
+        $request->session()->put('login_captcha_answer', (string) ($left + $right));
+
+        return "{$left} + {$right}";
+    }
+
+    private function ensureLoginIsNotThrottled(Request $request): void
+    {
+        if (! RateLimiter::tooManyAttempts($this->throttleKey($request), 5)) {
+            return;
+        }
+
+        $seconds = RateLimiter::availableIn($this->throttleKey($request));
+        throw ValidationException::withMessages([
+            'email' => "Muitas tentativas. Tente novamente em {$seconds} segundos.",
+        ]);
+    }
+
+    private function throttleKey(Request $request): string
+    {
+        return Str::transliterate(Str::lower((string) $request->input('email')).'|'.$request->ip());
     }
 }

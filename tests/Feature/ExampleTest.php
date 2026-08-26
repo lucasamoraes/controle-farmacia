@@ -15,4 +15,10 @@ class ExampleTest extends TestCase
     {
         $this->get('/entrar')->assertOk();
     }
+
+    public function test_public_registration_is_not_available(): void
+    {
+        $this->get('/cadastro')->assertNotFound();
+        $this->post('/cadastro')->assertNotFound();
+    }
 }
