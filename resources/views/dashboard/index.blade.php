@@ -297,7 +297,13 @@
                 @forelse ($channelRevenueChart as $row)
                     @php $totalChannel = $row['delivery'] + $row['counter']; @endphp
                     <div class="bar-row">
-                        <div class="bar-meta"><span>{{ $row['label'] }}</span><span>Delivery {{ $fmtMoney($row['delivery']) }} | Balcao {{ $fmtMoney($row['counter']) }}</span></div>
+                        <div class="bar-meta">
+                            <span>{{ $row['label'] }}</span>
+                            <span>
+                                Delivery {{ $fmtMoney($row['delivery']) }} ({{ $fmtPercent($row['delivery_percent'] ?? 0) }})
+                                | Balcao {{ $fmtMoney($row['counter']) }} ({{ $fmtPercent($row['counter_percent'] ?? 0) }})
+                            </span>
+                        </div>
                         <div class="bar-track" style="height:12px; display:flex;">
                             <div style="height:100%; width:{{ $totalChannel > 0 ? ($row['delivery'] / $maxChannel) * 100 : 0 }}%; background:#2563eb;"></div>
                             <div style="height:100%; width:{{ $totalChannel > 0 ? ($row['counter'] / $maxChannel) * 100 : 0 }}%; background:var(--brand);"></div>
@@ -380,6 +386,7 @@
             (() => {
                 if (!window.Chart) return;
                 const money = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                const percent = (value) => `${Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
                 const commonOptions = {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -442,7 +449,22 @@
                             { label: 'Balcao', data: channels.map((row) => row.counter), backgroundColor: '#0f766e', borderRadius: 4 }
                         ]
                     },
-                    options: { ...commonOptions, scales: { x: { stacked: false }, y: commonOptions.scales.y } }
+                    options: {
+                        ...commonOptions,
+                        plugins: {
+                            ...commonOptions.plugins,
+                            tooltip: {
+                                callbacks: {
+                                    label: (ctx) => {
+                                        const row = channels[ctx.dataIndex] || {};
+                                        const key = ctx.dataset.label === 'Delivery' ? 'delivery_percent' : 'counter_percent';
+                                        return `${ctx.dataset.label}: ${money(ctx.parsed.y ?? ctx.parsed.x)} (${percent(row[key])})`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: { x: { stacked: false }, y: commonOptions.scales.y }
+                    }
                 });
 
                 const expenseCanvas = document.getElementById('expenseBarChart');

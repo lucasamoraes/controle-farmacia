@@ -365,13 +365,23 @@ class DashboardController extends Controller
             ->where('gross_revenue', '>', 0)
             ->orderByDesc('reference_month')
             ->get()
-            ->map(fn ($row) => [
-                'label' => $row->reference_month->format('m/Y'),
-                'delivery' => (float) $row->delivery_revenue,
-                'counter' => (float) $row->counter_revenue,
-                'delivery_count' => (int) $row->delivery_sales_count,
-                'counter_count' => (int) $row->counter_sales_count,
-            ])
+            ->map(function ($row) {
+                $delivery = (float) $row->delivery_revenue;
+                $counter = (float) $row->counter_revenue;
+                $grossRevenue = (float) $row->gross_revenue;
+                $channelTotal = $delivery + $counter;
+                $baseRevenue = $grossRevenue > 0 ? $grossRevenue : $channelTotal;
+
+                return [
+                    'label' => $row->reference_month->format('m/Y'),
+                    'delivery' => $delivery,
+                    'counter' => $counter,
+                    'delivery_count' => (int) $row->delivery_sales_count,
+                    'counter_count' => (int) $row->counter_sales_count,
+                    'delivery_percent' => $baseRevenue > 0 ? ($delivery / $baseRevenue) * 100 : 0,
+                    'counter_percent' => $baseRevenue > 0 ? ($counter / $baseRevenue) * 100 : 0,
+                ];
+            })
             ->all();
     }
 
