@@ -103,28 +103,52 @@
     @endif
 
     <section class="card" style="margin-top:18px;">
-        <h2 class="panel-title">Produtos da lista</h2>
+        <div class="actions" style="justify-content:space-between; align-items:flex-end;">
+            <div>
+                <h2 class="panel-title">Produtos da lista</h2>
+                <p class="subtitle">Digite parte do nome, classe ou observacao para encontrar um item ja cadastrado nesta lista.</p>
+            </div>
+            <label style="max-width:420px; width:100%;">Buscar na lista
+                <input type="search" data-list-filter="#purchase-list-items" placeholder="Ex: luftal, genericos, observacao">
+            </label>
+        </div>
         <div class="table-wrap"><table>
             <thead><tr><th>Produto</th><th>Classe</th><th>Quantidade</th><th>Unidade</th><th>Ultima compra</th><th>Observacao</th><th></th></tr></thead>
-            <tbody>
+            <tbody id="purchase-list-items">
             @forelse ($list->items as $item)
-                <tr>
-                    <td><strong>{{ $item->description }}</strong></td>
-                    <td>{{ $item->product?->class ?: '-' }}</td>
+                @php
+                    $productClass = $item->product?->class ?: '-';
+                    $itemSearch = trim($item->description.' '.$productClass.' '.($item->notes ?: ''));
+                @endphp
+                <tr data-filter-row data-search="{{ $itemSearch }}">
+                    <td data-sort-value="{{ $item->description }}"><strong>{{ $item->description }}</strong></td>
+                    <td data-sort-value="{{ $productClass }}">{{ $productClass }}</td>
                     <td>
                         @if ($canEditItems)
                             <form method="post" action="{{ route('listas-compras.itens.update', $item) }}" class="actions" data-auto-submit>
                                 @csrf @method('PUT')
                                 <input type="number" step="1" min="1" name="quantity" value="{{ (float) $item->quantity }}" style="width:90px;" required data-auto-submit-input>
                                 <input type="hidden" name="unit" value="{{ $item->unit }}">
+                                <input type="hidden" name="last_purchase_price" value="{{ $item->product?->last_purchase_price ?? 0 }}">
                             </form>
                         @else
                             {{ number_format((float) $item->quantity, 3, ',', '.') }}
                         @endif
                     </td>
-                    <td>{{ $item->unit }}</td>
-                    <td>{{ $fmtMoney($item->product?->last_purchase_price ?? 0) }}</td>
-                    <td>{{ $item->notes ?: '-' }}</td>
+                    <td data-sort-value="{{ $item->unit }}">{{ $item->unit }}</td>
+                    <td data-sort-value="{{ $item->product?->last_purchase_price ?? 0 }}">
+                        @if ($canEditItems && $item->product)
+                            <form method="post" action="{{ route('listas-compras.itens.update', $item) }}" data-auto-submit>
+                                @csrf @method('PUT')
+                                <input type="hidden" name="quantity" value="{{ (float) $item->quantity }}">
+                                <input type="hidden" name="unit" value="{{ $item->unit }}">
+                                <input type="number" step="0.01" min="0" name="last_purchase_price" value="{{ $item->product->last_purchase_price }}" style="width:120px;" data-auto-submit-input>
+                            </form>
+                        @else
+                            {{ $fmtMoney($item->product?->last_purchase_price ?? 0) }}
+                        @endif
+                    </td>
+                    <td data-sort-value="{{ $item->notes ?: '' }}">{{ $item->notes ?: '-' }}</td>
                     <td>
                         @if ($canEditItems)
                             <form method="post" action="{{ route('listas-compras.itens.destroy', $item) }}" data-confirm-message="Deseja remover este produto da lista?" data-confirm-button="Remover" data-confirm-danger="1">
@@ -137,7 +161,30 @@
             @empty
                 <tr><td colspan="7">Nenhum produto adicionado.</td></tr>
             @endforelse
+                <tr data-filter-empty style="display:none;"><td colspan="7">Nenhum produto encontrado nesta lista.</td></tr>
             </tbody>
         </table></div>
     </section>
+
+    <script>
+        document.querySelectorAll('[data-list-filter]').forEach((input) => {
+            const target = document.querySelector(input.dataset.listFilter);
+            if (!target) return;
+
+            input.addEventListener('input', () => {
+                const terms = input.value.toLocaleLowerCase('pt-BR').trim().split(/\s+/).filter(Boolean);
+                let visibleRows = 0;
+
+                target.querySelectorAll('[data-filter-row]').forEach((row) => {
+                    const text = (row.dataset.search || row.innerText || '').toLocaleLowerCase('pt-BR');
+                    const visible = terms.every((term) => text.includes(term));
+                    row.style.display = visible ? '' : 'none';
+                    if (visible) visibleRows++;
+                });
+
+                const empty = target.querySelector('[data-filter-empty]');
+                if (empty) empty.style.display = visibleRows === 0 ? '' : 'none';
+            });
+        });
+    </script>
 @endsection

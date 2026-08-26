@@ -102,16 +102,11 @@ class PurchaseListController extends Controller
             return back()->withErrors(['product_id' => 'Selecione um produto cadastrado ou cadastre um novo produto.'])->withInput();
         }
 
-        $lista->items()->create([
-            'product_id' => $product->id,
-            'description' => $product->description,
-            'ean' => null,
-            'quantity' => $data['quantity'],
-            'unit' => $data['unit'],
-            'notes' => $data['notes'] ?? null,
-        ]);
+        $wasUpdated = $this->addOrUpdateListItem($lista, $product, $data);
 
-        return redirect()->route('listas-compras.show', $lista)->with('status', 'Produto adicionado a lista.');
+        return redirect()
+            ->route('listas-compras.show', $lista)
+            ->with('status', $wasUpdated ? 'Produto ja estava na lista. A quantidade foi atualizada.' : 'Produto adicionado a lista.');
     }
 
     public function storeProductItem(Request $request, PurchaseList $lista): RedirectResponse
@@ -130,23 +125,30 @@ class PurchaseListController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
-        $product = $company->products()->create([
-            'description' => $data['description'],
-            'class' => $data['class'] ?? null,
-            'last_purchase_price' => $data['last_purchase_price'] ?? 0,
-            'is_active' => true,
-        ]);
+        $product = $company->products()
+            ->where('description', $data['description'])
+            ->first();
 
-        $lista->items()->create([
-            'product_id' => $product->id,
-            'description' => $product->description,
-            'ean' => null,
-            'quantity' => $data['quantity'],
-            'unit' => $data['unit'],
-            'notes' => $data['notes'] ?? null,
-        ]);
+        if ($product) {
+            $product->update([
+                'class' => $data['class'] ?? $product->class,
+                'last_purchase_price' => $data['last_purchase_price'] ?? $product->last_purchase_price,
+                'is_active' => true,
+            ]);
+        } else {
+            $product = $company->products()->create([
+                'description' => $data['description'],
+                'class' => $data['class'] ?? null,
+                'last_purchase_price' => $data['last_purchase_price'] ?? 0,
+                'is_active' => true,
+            ]);
+        }
 
-        return redirect()->route('listas-compras.show', $lista)->with('status', 'Produto cadastrado e adicionado a lista.');
+        $wasUpdated = $this->addOrUpdateListItem($lista, $product, $data);
+
+        return redirect()
+            ->route('listas-compras.show', $lista)
+            ->with('status', $wasUpdated ? 'Produto ja existia na lista. A quantidade foi atualizada.' : 'Produto cadastrado e adicionado a lista.');
     }
 
     public function updateStatus(Request $request, PurchaseList $lista): RedirectResponse
@@ -193,11 +195,46 @@ class PurchaseListController extends Controller
         $data = $request->validate([
             'quantity' => ['required', 'numeric', 'min:0.001'],
             'unit' => ['required', 'string', 'max:20'],
+            'last_purchase_price' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $item->update($data);
+        $item->update([
+            'quantity' => $data['quantity'],
+            'unit' => $data['unit'],
+        ]);
+
+        if (array_key_exists('last_purchase_price', $data) && $item->product) {
+            abort_unless($item->product->company_id === $this->company()->id, 404);
+            $item->product->update(['last_purchase_price' => $data['last_purchase_price'] ?? 0]);
+        }
 
         return redirect()->route('listas-compras.show', $list)->with('status', 'Quantidade atualizada.');
+    }
+
+    private function addOrUpdateListItem(PurchaseList $list, Product $product, array $data): bool
+    {
+        $existing = $list->items()->where('product_id', $product->id)->first();
+        if ($existing) {
+            $existing->update([
+                'description' => $product->description,
+                'quantity' => (float) $existing->quantity + (float) $data['quantity'],
+                'unit' => $data['unit'],
+                'notes' => $data['notes'] ?? $existing->notes,
+            ]);
+
+            return true;
+        }
+
+        $list->items()->create([
+            'product_id' => $product->id,
+            'description' => $product->description,
+            'ean' => null,
+            'quantity' => $data['quantity'],
+            'unit' => $data['unit'],
+            'notes' => $data['notes'] ?? null,
+        ]);
+
+        return false;
     }
 
     private function abortUnlessCompanyList(PurchaseList $list): void

@@ -329,17 +329,27 @@
                 th.addEventListener('click', () => {
                     const tbody = table.tBodies[0];
                     if (!tbody) return;
-                    const rows = [...tbody.rows].filter((row) => row.cells.length === table.tHead.rows[0].cells.length);
+                    const rows = [...tbody.rows].filter((row) => row.cells.length === table.tHead.rows[0].cells.length && !row.matches('[data-filter-empty]'));
                     const direction = th.dataset.sortDirection === 'asc' ? 'desc' : 'asc';
                     th.dataset.sortDirection = direction;
+                    const sortValue = (cell) => cell?.dataset.sortValue ?? cell?.innerText.trim() ?? '';
+                    const parseNumber = (value) => {
+                        const normalized = String(value)
+                            .replace(/\s/g, '')
+                            .replace(/^R\$/i, '')
+                            .replace(/\./g, '')
+                            .replace(',', '.');
+
+                        return /^-?\d+(\.\d+)?$/.test(normalized) ? Number(normalized) : null;
+                    };
                     rows.sort((a, b) => {
-                        const left = a.cells[index]?.innerText.trim() || '';
-                        const right = b.cells[index]?.innerText.trim() || '';
-                        const leftNumber = Number(left.replace(/[^\d,-]/g, '').replace(',', '.'));
-                        const rightNumber = Number(right.replace(/[^\d,-]/g, '').replace(',', '.'));
-                        const result = Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && left !== '' && right !== ''
+                        const left = sortValue(a.cells[index]);
+                        const right = sortValue(b.cells[index]);
+                        const leftNumber = parseNumber(left);
+                        const rightNumber = parseNumber(right);
+                        const result = leftNumber !== null && rightNumber !== null
                             ? leftNumber - rightNumber
-                            : left.localeCompare(right, 'pt-BR', { numeric: true });
+                            : String(left).localeCompare(String(right), 'pt-BR', { numeric: true, sensitivity: 'base' });
                         return direction === 'asc' ? result : -result;
                     });
                     rows.forEach((row) => tbody.appendChild(row));
