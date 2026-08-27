@@ -12,11 +12,25 @@
     .quote-scroll-top-inner { height:1px; }
     .quote-table-wrap { max-height:72vh; overflow:auto; position:relative; }
     .quote-table { min-width:980px; table-layout:fixed; }
-    .quote-table th, .quote-table td { min-width:150px; background:var(--panel); }
+    .quote-table th, .quote-table td { min-width:124px; width:124px; background:var(--panel); padding:10px; }
     .quote-table thead th { position:sticky; top:0; z-index:4; background:#eef3f8; }
-    .quote-table .sticky-product { position:sticky; left:0; z-index:3; min-width:300px; width:300px; box-shadow:1px 0 0 var(--line); }
-    .quote-table .sticky-qty { position:sticky; left:300px; z-index:3; min-width:120px; width:120px; box-shadow:1px 0 0 var(--line); }
+    .quote-table .sticky-product { position:sticky; left:0; z-index:3; min-width:280px; width:280px; box-shadow:1px 0 0 var(--line); }
+    .quote-table .sticky-qty { position:sticky; left:280px; z-index:3; min-width:112px; width:112px; box-shadow:1px 0 0 var(--line); }
     .quote-table thead .sticky-product, .quote-table thead .sticky-qty { z-index:6; background:#eef3f8; }
+    .quote-table .quote-last-price { min-width:96px; width:96px; }
+    .quote-table .quote-supplier-col { min-width:128px; width:128px; }
+    .quote-table .quote-winner-col { min-width:150px; width:150px; }
+    .quote-product-name { display:block; line-height:1.25; overflow-wrap:anywhere; }
+    .quote-table input[type="number"] { min-height:38px; padding:8px; }
+    .quote-price-input { width:100% !important; min-width:0; }
+    .quote-supplier-menu { position:relative; }
+    .quote-supplier-menu summary { cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:32px; border:1px solid transparent; border-radius:6px; padding:4px 6px; color:#243b53; }
+    .quote-supplier-menu summary::-webkit-details-marker { display:none; }
+    .quote-supplier-menu summary::after { content:'\22EE'; color:#64748b; font-size:16px; line-height:1; }
+    .quote-supplier-name { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:96px; }
+    .quote-supplier-menu[open] summary { background:#e8eef5; border-color:#cbd5e1; }
+    .quote-supplier-actions { position:absolute; top:38px; left:0; z-index:20; min-width:136px; background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px; box-shadow:0 14px 32px rgba(15,23,42,.14); display:grid; gap:6px; }
+    .quote-supplier-actions .btn { width:100%; }
     .quote-table tbody tr[hidden] { display:none; }
     .quote-pager { display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; color:var(--muted); font-size:13px; }
 </style>
@@ -126,19 +140,21 @@
                     <tr>
                         <th class="sticky-product">Produto</th>
                         <th class="sticky-qty">Qtd</th>
-                        <th>Ult. compra</th>
+                        <th class="quote-last-price">Ult. compra</th>
                         @foreach ($participants as $participant)
-                            <th>
-                                <div style="display:grid; gap:6px;">
-                                    <span>{{ $participant->quoted_name }}</span>
-                                    <span class="actions">
+                            <th class="quote-supplier-col">
+                                <details class="quote-supplier-menu">
+                                    <summary title="{{ $participant->quoted_name }}">
+                                        <span class="quote-supplier-name">{{ $participant->quoted_name }}</span>
+                                    </summary>
+                                    <div class="quote-supplier-actions">
                                         <a class="btn small secondary" href="{{ route('cotacoes.orders.export', [$quotation, $participant]) }}">Excel</a>
                                         <a class="btn small secondary" href="{{ route('cotacoes.orders.print', [$quotation, $participant]) }}" target="_blank">PDF</a>
-                                    </span>
-                                </div>
+                                    </div>
+                                </details>
                             </th>
                         @endforeach
-                        <th>Vencedor</th>
+                        <th class="quote-winner-col">Vencedor</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -149,26 +165,26 @@
                     @endphp
                     <tr data-quote-row>
                         <td class="sticky-product">
-                            <strong>{{ $item->description }}</strong>
+                            <strong class="quote-product-name">{{ $item->description }}</strong>
                             @if ($item->product?->image_url)
                                 <br><a href="{{ $item->product->image_url }}" target="_blank" style="color:var(--brand);">imagem</a>
                             @endif
                         </td>
                         <td class="sticky-qty">
-                            <div style="display:grid; gap:4px; width:92px;">
-                                <input type="number" step="1" min="1" name="quantities[{{ $item->id }}]" value="{{ (float) $item->quantity }}" style="width:92px;">
+                            <div style="display:grid; gap:4px; width:86px;">
+                                <input type="number" step="1" min="1" name="quantities[{{ $item->id }}]" value="{{ (float) $item->quantity }}" style="width:86px;">
                                 <span style="color:var(--muted); font-size:12px;">{{ $item->unit }}</span>
                             </div>
                         </td>
-                        <td>{{ $lastPrice > 0 ? $fmtMoney($lastPrice) : '-' }}</td>
+                        <td class="quote-last-price">{{ $lastPrice > 0 ? $fmtMoney($lastPrice) : '-' }}</td>
                         @foreach ($participants as $participant)
                             @php
                                 $price = $matrix[$item->id][$participant->id]->unit_price ?? null;
                                 $isLowest = $winner && (int) ($winner['lowest_quotation_supplier_id'] ?? 0) === (int) $participant->id;
                                 $isWinner = $winner && (int) ($winner['quotation_supplier_id'] ?? 0) === (int) $participant->id;
                             @endphp
-                            <td style="{{ $isWinner ? 'background:#ecfdf5;' : '' }}">
-                                <input type="number" step="0.01" min="0" name="prices[{{ $item->id }}][{{ $participant->id }}]" value="{{ $price }}" style="width:120px;">
+                            <td class="quote-supplier-col" style="{{ $isWinner ? 'background:#ecfdf5;' : '' }}">
+                                <input class="quote-price-input" type="number" step="0.01" min="0" name="prices[{{ $item->id }}][{{ $participant->id }}]" value="{{ $price }}">
                                 @if ($price)
                                     <label style="display:flex; align-items:center; gap:6px; margin-top:7px; font-size:12px; font-weight:700;">
                                         <input type="radio" name="selected_winners[{{ $item->id }}]" value="{{ $participant->id }}" @checked($isWinner) style="width:auto; min-height:0;">
@@ -183,7 +199,7 @@
                                 @endif
                             </td>
                         @endforeach
-                        <td>
+                        <td class="quote-winner-col">
                             @if ($winner)
                                 @php $variation = $winner['variation']; @endphp
                                 <strong>{{ $participants->firstWhere('id', $winner['quotation_supplier_id'])?->quoted_name }}</strong><br>
@@ -244,6 +260,15 @@
                 topScroll.addEventListener('scroll', () => { tableWrap.scrollLeft = topScroll.scrollLeft; });
                 tableWrap.addEventListener('scroll', () => { topScroll.scrollLeft = tableWrap.scrollLeft; });
             }
+
+            document.querySelectorAll('.quote-supplier-menu').forEach((menu) => {
+                menu.addEventListener('toggle', () => {
+                    if (!menu.open) return;
+                    document.querySelectorAll('.quote-supplier-menu[open]').forEach((other) => {
+                        if (other !== menu) other.removeAttribute('open');
+                    });
+                });
+            });
 
             const renderPage = () => {
                 if (!pageSize || rows.length === 0) return;
