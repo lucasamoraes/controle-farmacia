@@ -10,6 +10,7 @@ class QuotationPrice extends Model
     protected $fillable = [
         'quotation_id',
         'purchase_list_item_id',
+        'quotation_supplier_id',
         'supplier_id',
         'unit_price',
         'is_selected_winner',
@@ -33,5 +34,10 @@ class QuotationPrice extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function participant(): BelongsTo
+    {
+        return $this->belongsTo(QuotationSupplier::class, 'quotation_supplier_id');
     }
 }

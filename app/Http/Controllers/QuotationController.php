@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Company;
 use App\Models\PurchaseList;
 use App\Models\Quotation;
+use App\Models\QuotationSupplier;
 use App\Models\Supplier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -43,13 +44,16 @@ class QuotationController extends Controller
     {
         $this->abortUnlessCompanyQuotation($cotacao);
         $company = $this->company();
-        $cotacao->load(['purchaseList.items.product', 'suppliers', 'prices']);
+        $cotacao->load(['purchaseList.items.product', 'participants.supplier', 'prices']);
+        $participants = $cotacao->participants
+            ->sortBy(fn ($participant) => $participant->quoted_name)
+            ->values();
 
         return view('quotations.show', [
             'company' => $company,
             'quotation' => $cotacao,
             'list' => $cotacao->purchaseList,
-            'suppliers' => $cotacao->suppliers()->orderBy('name')->get(),
+            'participants' => $participants,
             'availableSuppliers' => $this->merchandiseSuppliers($company)->get(),
             'matrix' => $this->matrix($cotacao),
             'winners' => $this->winners($cotacao),
@@ -61,11 +65,38 @@ class QuotationController extends Controller
         $this->abortUnlessCompanyQuotation($cotacao);
         $company = $this->company();
         abort_unless(Auth::user()->canWriteFinance($company), 403);
-        $data = $request->validate(['supplier_id' => ['required', 'exists:suppliers,id']]);
+        $data = $request->validate([
+            'supplier_id' => ['required', 'exists:suppliers,id'],
+            'display_name' => ['nullable', 'string', 'max:255'],
+        ]);
         $supplier = $this->merchandiseSuppliers($company)->findOrFail($data['supplier_id']);
-        $cotacao->suppliers()->syncWithoutDetaching([$supplier->id]);
+        $displayName = trim((string) ($data['display_name'] ?? ''));
+
+        if ($displayName === '') {
+            $existing = $cotacao->participants()->where('supplier_id', $supplier->id)->whereNull('display_name')->first();
+            if ($existing) {
+                return redirect()->route('cotacoes.show', $cotacao)->with('status', 'Fornecedor ja estava na cotacao.');
+            }
+        }
+
+        $cotacao->participants()->create([
+            'supplier_id' => $supplier->id,
+            'display_name' => $displayName !== '' ? $displayName : null,
+        ]);
 
         return redirect()->route('cotacoes.show', $cotacao)->with('status', 'Fornecedor adicionado a cotacao.');
+    }
+
+    public function removeSupplier(Quotation $cotacao, QuotationSupplier $participante): RedirectResponse
+    {
+        $this->abortUnlessCompanyQuotation($cotacao);
+        abort_unless(Auth::user()->canWriteFinance($this->company()), 403);
+        abort_unless($participante->quotation_id === $cotacao->id, 404);
+
+        $cotacao->prices()->where('quotation_supplier_id', $participante->id)->delete();
+        $participante->delete();
+
+        return redirect()->route('cotacoes.show', $cotacao)->with('status', 'Fornecedor removido da cotacao.');
     }
 
     public function updatePrices(Request $request, Quotation $cotacao): RedirectResponse
@@ -89,22 +120,28 @@ class QuotationController extends Controller
         }
 
         foreach ($prices as $itemId => $supplierPrices) {
-            foreach ($supplierPrices as $supplierId => $value) {
+            foreach ($supplierPrices as $participantId => $value) {
+                $participant = $cotacao->participants()->whereKey($participantId)->first();
+                if (! $participant) {
+                    continue;
+                }
+
                 $value = $this->money($value);
                 if ($value <= 0) {
                     $cotacao->prices()
                         ->where('purchase_list_item_id', $itemId)
-                        ->where('supplier_id', $supplierId)
+                        ->where('quotation_supplier_id', $participant->id)
                         ->delete();
                     continue;
                 }
 
                 $cotacao->prices()->updateOrCreate([
                     'purchase_list_item_id' => $itemId,
-                    'supplier_id' => $supplierId,
+                    'quotation_supplier_id' => $participant->id,
                 ], [
+                    'supplier_id' => $participant->supplier_id,
                     'unit_price' => $value,
-                    'is_selected_winner' => (string) ($selectedWinners[$itemId] ?? '') === (string) $supplierId,
+                    'is_selected_winner' => (string) ($selectedWinners[$itemId] ?? '') === (string) $participant->id,
                 ]);
             }
 
@@ -114,7 +151,7 @@ class QuotationController extends Controller
 
             $cotacao->prices()
                 ->where('purchase_list_item_id', $itemId)
-                ->where('supplier_id', '!=', $selectedWinners[$itemId])
+                ->where('quotation_supplier_id', '!=', $selectedWinners[$itemId])
                 ->update(['is_selected_winner' => false]);
         }
 
@@ -137,11 +174,11 @@ class QuotationController extends Controller
         return $this->downloadSpreadsheet($spreadsheet, 'cotacao-produtos-'.$cotacao->id.'.xlsx');
     }
 
-    public function importSupplierPrices(Request $request, Quotation $cotacao, Supplier $fornecedor): RedirectResponse
+    public function importSupplierPrices(Request $request, Quotation $cotacao, QuotationSupplier $participante): RedirectResponse
     {
         $this->abortUnlessCompanyQuotation($cotacao);
-        abort_unless($fornecedor->company_id === $this->company()->id, 404);
-        abort_unless($cotacao->suppliers()->whereKey($fornecedor->id)->exists(), 403);
+        abort_unless($participante->quotation_id === $cotacao->id, 404);
+        abort_unless($participante->supplier?->company_id === $this->company()->id, 404);
         $request->validate(['planilha' => ['required', 'file', 'mimes:xlsx,xls,csv,txt']]);
         $rows = IOFactory::load($request->file('planilha')->getRealPath())->getActiveSheet()->toArray(null, true, true, true);
         $headers = array_map(fn ($value) => mb_strtolower(trim((string) $value)), array_shift($rows) ?: []);
@@ -163,22 +200,25 @@ class QuotationController extends Controller
 
             $cotacao->prices()->updateOrCreate([
                 'purchase_list_item_id' => $item->id,
-                'supplier_id' => $fornecedor->id,
-            ], ['unit_price' => $price]);
+                'quotation_supplier_id' => $participante->id,
+            ], [
+                'supplier_id' => $participante->supplier_id,
+                'unit_price' => $price,
+            ]);
             $count++;
         }
 
-        return redirect()->route('cotacoes.show', $cotacao)->with('status', "{$count} preco(s) importado(s) para {$fornecedor->name}.");
+        return redirect()->route('cotacoes.show', $cotacao)->with('status', "{$count} preco(s) importado(s) para {$participante->quoted_name}.");
     }
 
-    public function exportWinnerOrder(Quotation $cotacao, Supplier $fornecedor): StreamedResponse
+    public function exportWinnerOrder(Quotation $cotacao, QuotationSupplier $participante): StreamedResponse
     {
         $this->abortUnlessCompanyQuotation($cotacao);
-        $rows = $this->winnerRowsForSupplier($cotacao, $fornecedor);
+        $rows = $this->winnerRowsForParticipant($cotacao, $participante);
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Pedido');
-        $sheet->fromArray(['Fornecedor', $fornecedor->name, 'Data', now()->format('d/m/Y')], null, 'A1');
+        $sheet->fromArray(['Fornecedor', $participante->quoted_name, 'Data', now()->format('d/m/Y')], null, 'A1');
         $sheet->fromArray(['Descricao', 'Quantidade', 'Unidade', 'Valor unitario', 'Total'], null, 'A3');
         $line = 4;
         foreach ($rows as $row) {
@@ -186,18 +226,19 @@ class QuotationController extends Controller
             $line++;
         }
 
-        return $this->downloadSpreadsheet($spreadsheet, 'pedido-'.$fornecedor->id.'-cotacao-'.$cotacao->id.'.xlsx');
+        return $this->downloadSpreadsheet($spreadsheet, 'pedido-'.$participante->id.'-cotacao-'.$cotacao->id.'.xlsx');
     }
 
-    public function printWinnerOrder(Quotation $cotacao, Supplier $fornecedor)
+    public function printWinnerOrder(Quotation $cotacao, QuotationSupplier $participante)
     {
         $this->abortUnlessCompanyQuotation($cotacao);
 
         return view('quotations.order-print', [
             'company' => $this->company(),
             'quotation' => $cotacao,
-            'supplier' => $fornecedor,
-            'rows' => $this->winnerRowsForSupplier($cotacao, $fornecedor),
+            'supplierName' => $participante->quoted_name,
+            'supplier' => $participante->supplier,
+            'rows' => $this->winnerRowsForParticipant($cotacao, $participante),
         ]);
     }
 
@@ -215,7 +256,7 @@ class QuotationController extends Controller
     {
         return $quotation->prices
             ->groupBy('purchase_list_item_id')
-            ->map(fn ($rows) => $rows->keyBy('supplier_id'))
+            ->map(fn ($rows) => $rows->keyBy('quotation_supplier_id'))
             ->all();
     }
 
@@ -235,9 +276,10 @@ class QuotationController extends Controller
                 $last = (float) ($item->product?->last_purchase_price ?? 0);
                 $unit = (float) $winner->unit_price;
                 $winners[$item->id] = [
+                    'quotation_supplier_id' => $winner->quotation_supplier_id,
                     'supplier_id' => $winner->supplier_id,
                     'unit_price' => $unit,
-                    'lowest_supplier_id' => $lowest?->supplier_id,
+                    'lowest_quotation_supplier_id' => $lowest?->quotation_supplier_id,
                     'lowest_unit_price' => $lowest ? (float) $lowest->unit_price : null,
                     'manual' => (bool) $selected,
                     'variation' => $last > 0 ? (($unit - $last) / $last) * 100 : null,
@@ -248,16 +290,17 @@ class QuotationController extends Controller
         return $winners;
     }
 
-    private function winnerRowsForSupplier(Quotation $quotation, Supplier $supplier): array
+    private function winnerRowsForParticipant(Quotation $quotation, QuotationSupplier $participant): array
     {
-        abort_unless($supplier->company_id === $this->company()->id, 404);
+        abort_unless($participant->quotation_id === $quotation->id, 404);
+        abort_unless($participant->supplier?->company_id === $this->company()->id, 404);
         $quotation->loadMissing(['purchaseList.items.product', 'prices']);
         $winners = $this->winners($quotation);
         $rows = [];
 
         foreach ($quotation->purchaseList->items as $item) {
             $winner = $winners[$item->id] ?? null;
-            if (! $winner || (int) $winner['supplier_id'] !== (int) $supplier->id) {
+            if (! $winner || (int) $winner['quotation_supplier_id'] !== (int) $participant->id) {
                 continue;
             }
             $rows[] = [

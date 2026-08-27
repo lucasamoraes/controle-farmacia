@@ -40,7 +40,12 @@ class Quotation extends Model
 
     public function suppliers(): BelongsToMany
     {
-        return $this->belongsToMany(Supplier::class, 'quotation_suppliers')->withTimestamps();
+        return $this->belongsToMany(Supplier::class, 'quotation_suppliers')->withPivot(['id', 'display_name'])->withTimestamps();
+    }
+
+    public function participants(): HasMany
+    {
+        return $this->hasMany(QuotationSupplier::class);
     }
 
     public function prices(): HasMany

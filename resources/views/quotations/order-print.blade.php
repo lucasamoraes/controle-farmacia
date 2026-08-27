@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="utf-8">
-    <title>Pedido {{ $supplier->name }}</title>
+    <title>Pedido {{ $supplierName ?? $supplier->name }}</title>
     <style>
         body { font-family: Arial, sans-serif; color:#111827; margin:28px; }
         h1 { margin:0 0 4px; font-size:22px; }
@@ -18,7 +18,7 @@
     <button onclick="window.print()">Imprimir ou salvar PDF</button>
     <h1>Pedido de compra</h1>
     <p><strong>Farmacia:</strong> {{ $company->trade_name ?: $company->name }}</p>
-    <p><strong>Fornecedor:</strong> {{ $supplier->name }}</p>
+    <p><strong>Fornecedor:</strong> {{ $supplierName ?? $supplier->name }}</p>
     <p><strong>Cotacao:</strong> #{{ $quotation->id }} | <strong>Data:</strong> {{ now()->format('d/m/Y') }}</p>
 
     <table>

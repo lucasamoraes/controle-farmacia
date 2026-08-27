@@ -146,11 +146,12 @@ Route::middleware('auth')->group(function () {
         Route::post('listas-compras/{lista}/cotacao', [QuotationController::class, 'start'])->name('cotacoes.start');
         Route::get('cotacoes/{cotacao}', [QuotationController::class, 'show'])->name('cotacoes.show');
         Route::post('cotacoes/{cotacao}/fornecedores', [QuotationController::class, 'addSupplier'])->name('cotacoes.fornecedores.store');
+        Route::delete('cotacoes/{cotacao}/participantes/{participante}', [QuotationController::class, 'removeSupplier'])->name('cotacoes.fornecedores.destroy');
         Route::put('cotacoes/{cotacao}/precos', [QuotationController::class, 'updatePrices'])->name('cotacoes.precos.update');
         Route::get('cotacoes/{cotacao}/exportar-lista', [QuotationController::class, 'exportList'])->name('cotacoes.export-list');
-        Route::post('cotacoes/{cotacao}/fornecedores/{fornecedor}/importar-precos', [QuotationController::class, 'importSupplierPrices'])->name('cotacoes.import-prices');
-        Route::get('cotacoes/{cotacao}/fornecedores/{fornecedor}/pedido', [QuotationController::class, 'exportWinnerOrder'])->name('cotacoes.orders.export');
-        Route::get('cotacoes/{cotacao}/fornecedores/{fornecedor}/pedido-pdf', [QuotationController::class, 'printWinnerOrder'])->name('cotacoes.orders.print');
+        Route::post('cotacoes/{cotacao}/participantes/{participante}/importar-precos', [QuotationController::class, 'importSupplierPrices'])->name('cotacoes.import-prices');
+        Route::get('cotacoes/{cotacao}/participantes/{participante}/pedido', [QuotationController::class, 'exportWinnerOrder'])->name('cotacoes.orders.export');
+        Route::get('cotacoes/{cotacao}/participantes/{participante}/pedido-pdf', [QuotationController::class, 'printWinnerOrder'])->name('cotacoes.orders.print');
         Route::patch('cotacoes/{cotacao}/finalizar', [QuotationController::class, 'finalize'])->name('cotacoes.finalize');
     });
 
