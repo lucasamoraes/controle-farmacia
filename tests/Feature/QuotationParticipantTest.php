@@ -99,7 +99,7 @@ class QuotationParticipantTest extends TestCase
         $this->assertDatabaseMissing('quotation_prices', ['purchase_list_item_id' => $item->id]);
     }
 
-    public function test_zero_quantity_removes_item_when_saving_quotation_prices(): void
+    public function test_zero_quantity_is_rejected_when_saving_quotation_prices(): void
     {
         [$company, $user] = $this->companyWithUser();
         $supplier = $this->merchandiseSupplier($company);
@@ -119,10 +119,10 @@ class QuotationParticipantTest extends TestCase
                 'quantities' => [$item->id => 0],
                 'prices' => [$item->id => [$participant->id => 10]],
             ])
-            ->assertRedirect("/cotacoes/{$quotation->id}");
+            ->assertSessionHasErrors('quantities');
 
-        $this->assertDatabaseMissing('purchase_list_items', ['id' => $item->id]);
-        $this->assertDatabaseMissing('quotation_prices', ['purchase_list_item_id' => $item->id]);
+        $this->assertDatabaseHas('purchase_list_items', ['id' => $item->id]);
+        $this->assertDatabaseHas('quotation_prices', ['purchase_list_item_id' => $item->id]);
     }
 
     private function companyWithUser(): array

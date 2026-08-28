@@ -36,6 +36,7 @@
     .quote-table tbody tr[hidden] { display:none; }
     .quote-map-search { min-width:260px; max-width:420px; flex:1; }
     .quote-map-info { margin-top:12px; color:var(--muted); font-size:13px; }
+    .quote-autosave-status { min-height:18px; text-align:right; color:var(--muted); font-size:13px; }
 </style>
 
 @section('content')
@@ -128,7 +129,7 @@
                 <input type="search" data-quote-search placeholder="Digite parte do nome do produto" autocomplete="off">
             </label>
         </div>
-        <form method="post" action="{{ route('cotacoes.precos.update', $quotation) }}" data-confirm-message="Deseja salvar os precos desta cotacao?" data-confirm-button="Salvar">
+        <form method="post" action="{{ route('cotacoes.precos.update', $quotation) }}" data-quote-price-form>
             @csrf @method('PUT')
             <div class="quote-scroll-top" data-quote-scroll-top><div class="quote-scroll-top-inner" data-quote-scroll-top-inner></div></div>
             <div class="table-wrap quote-table-wrap" data-quote-table-wrap><table class="quote-table">
@@ -175,8 +176,8 @@
                         </td>
                         <td class="sticky-qty">
                             <div style="display:grid; gap:4px; width:86px;">
-                                <input type="number" step="1" min="0" name="quantities[{{ $item->id }}]" value="{{ (float) $item->quantity }}" title="Use 0 para remover este produto da cotacao" style="width:86px;">
-                                <span style="color:var(--muted); font-size:12px;">{{ $item->unit }} | 0 remove</span>
+                                <input type="number" step="1" min="1" name="quantities[{{ $item->id }}]" value="{{ (float) $item->quantity }}" title="Use o X ao lado do produto para remover" data-quote-autosave style="width:86px;">
+                                <span style="color:var(--muted); font-size:12px;">{{ $item->unit }}</span>
                             </div>
                         </td>
                         <td class="quote-last-price">{{ $lastPrice > 0 ? $fmtMoney($lastPrice) : '-' }}</td>
@@ -187,10 +188,10 @@
                                 $isWinner = $winner && (int) ($winner['quotation_supplier_id'] ?? 0) === (int) $participant->id;
                             @endphp
                             <td class="quote-supplier-col" style="{{ $isWinner ? 'background:#ecfdf5;' : '' }}">
-                                <input class="quote-price-input" type="number" step="0.01" min="0" name="prices[{{ $item->id }}][{{ $participant->id }}]" value="{{ $price }}">
+                                <input class="quote-price-input" type="number" step="0.01" min="0" name="prices[{{ $item->id }}][{{ $participant->id }}]" value="{{ $price }}" data-quote-autosave>
                                 @if ($price)
                                     <label style="display:flex; align-items:center; gap:6px; margin-top:7px; font-size:12px; font-weight:700;">
-                                        <input type="radio" name="selected_winners[{{ $item->id }}]" value="{{ $participant->id }}" @checked($isWinner) style="width:auto; min-height:0;">
+                                        <input type="radio" name="selected_winners[{{ $item->id }}]" value="{{ $participant->id }}" @checked($isWinner) data-quote-autosave style="width:auto; min-height:0;">
                                         Escolher
                                     </label>
                                 @endif
@@ -228,9 +229,7 @@
             </table></div>
             <div class="quote-map-info" data-quote-map-info></div>
             @if ($participants->isNotEmpty())
-                <div class="actions" style="justify-content:flex-end; margin-top:14px;">
-                    <button class="btn" type="submit">Salvar precos</button>
-                </div>
+                <div class="quote-autosave-status" data-quote-autosave-status>Alteracoes sao salvas automaticamente.</div>
             @endif
         </form>
         @if ($quotation->status !== 'finalized')
@@ -250,6 +249,10 @@
             const rows = [...document.querySelectorAll('[data-quote-row]')];
             const search = document.querySelector('[data-quote-search]');
             const mapInfo = document.querySelector('[data-quote-map-info]');
+            const priceForm = document.querySelector('[data-quote-price-form]');
+            const autosaveStatus = document.querySelector('[data-quote-autosave-status]');
+            let autosaveTimer = null;
+            let autosaving = false;
 
             const syncWidth = () => {
                 if (tableWrap && topInner) topInner.style.width = `${tableWrap.scrollWidth}px`;
@@ -298,6 +301,57 @@
 
             search?.addEventListener('input', filterRows);
             filterRows();
+
+            const setAutosaveStatus = (message) => {
+                if (autosaveStatus) autosaveStatus.textContent = message;
+            };
+
+            const saveMap = async () => {
+                if (!priceForm || autosaving) return;
+                autosaving = true;
+                setAutosaveStatus('Salvando...');
+
+                try {
+                    const response = await fetch(priceForm.action, {
+                        method: 'POST',
+                        body: new FormData(priceForm),
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'same-origin',
+                    });
+                    const payload = await response.json().catch(() => ({}));
+
+                    if (!response.ok) {
+                        throw new Error(payload.message || 'Nao foi possivel salvar esta alteracao.');
+                    }
+
+                    setAutosaveStatus('Salvo automaticamente. Atualizando resultados...');
+                    window.setTimeout(() => window.location.reload(), 450);
+                } catch (error) {
+                    setAutosaveStatus('Erro ao salvar.');
+                    alert(error.message || 'Nao foi possivel salvar esta alteracao.');
+                    autosaving = false;
+                }
+            };
+
+            document.querySelectorAll('[data-quote-autosave]').forEach((field) => {
+                field.dataset.previousValue = field.value;
+                field.addEventListener('focus', () => {
+                    field.dataset.previousValue = field.value;
+                });
+                field.addEventListener('change', () => {
+                    if (field.name.startsWith('quantities') && Number(field.value) <= 0) {
+                        alert('A quantidade precisa ser maior que zero. Use o X ao lado do produto para remover.');
+                        field.value = field.dataset.previousValue || '1';
+                        return;
+                    }
+
+                    window.clearTimeout(autosaveTimer);
+                    autosaveTimer = window.setTimeout(saveMap, 350);
+                });
+            });
         })();
     </script>
 @endsection

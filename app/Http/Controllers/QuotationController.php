@@ -10,6 +10,7 @@ use App\Models\QuotationSupplier;
 use App\Models\Supplier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -113,14 +114,13 @@ class QuotationController extends Controller
         return redirect()->route('cotacoes.show', $cotacao)->with('status', 'Produto removido da cotacao.');
     }
 
-    public function updatePrices(Request $request, Quotation $cotacao): RedirectResponse
+    public function updatePrices(Request $request, Quotation $cotacao): RedirectResponse|JsonResponse
     {
         $this->abortUnlessCompanyQuotation($cotacao);
         abort_unless(Auth::user()->canWriteFinance($this->company()), 403);
         $prices = $request->input('prices', []);
         $quantities = $request->input('quantities', []);
         $selectedWinners = $request->input('selected_winners', []);
-        $removedItemIds = [];
 
         foreach ($quantities as $itemId => $quantity) {
             $item = $cotacao->purchaseList->items()->whereKey($itemId)->first();
@@ -135,10 +135,13 @@ class QuotationController extends Controller
 
             $quantity = (float) str_replace(',', '.', $quantity);
             if ($quantity <= 0) {
-                $cotacao->prices()->where('purchase_list_item_id', $item->id)->delete();
-                $item->delete();
-                $removedItemIds[] = (string) $itemId;
-                continue;
+                $message = 'A quantidade precisa ser maior que zero. Use o X para remover o produto da cotacao.';
+
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => $message], 422);
+                }
+
+                return back()->withErrors(['quantities' => $message]);
             }
 
             if ($quantity > 0) {
@@ -147,10 +150,6 @@ class QuotationController extends Controller
         }
 
         foreach ($prices as $itemId => $supplierPrices) {
-            if (in_array((string) $itemId, $removedItemIds, true)) {
-                continue;
-            }
-
             foreach ($supplierPrices as $participantId => $value) {
                 $participant = $cotacao->participants()->whereKey($participantId)->first();
                 if (! $participant) {
@@ -184,6 +183,10 @@ class QuotationController extends Controller
                 ->where('purchase_list_item_id', $itemId)
                 ->where('quotation_supplier_id', '!=', $selectedWinners[$itemId])
                 ->update(['is_selected_winner' => false]);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Precos atualizados.']);
         }
 
         return redirect()->route('cotacoes.show', $cotacao)->with('status', 'Precos atualizados.');
