@@ -251,6 +251,7 @@
             const mapInfo = document.querySelector('[data-quote-map-info]');
             const priceForm = document.querySelector('[data-quote-price-form]');
             const autosaveStatus = document.querySelector('[data-quote-autosave-status]');
+            const stateKey = 'quotation-map-state-{{ $quotation->id }}';
             let autosaveTimer = null;
             let autosaving = false;
 
@@ -302,6 +303,41 @@
             search?.addEventListener('input', filterRows);
             filterRows();
 
+            const saveState = () => {
+                sessionStorage.setItem(stateKey, JSON.stringify({
+                    search: search?.value || '',
+                    pageY: window.scrollY,
+                    tableTop: tableWrap?.scrollTop || 0,
+                    tableLeft: tableWrap?.scrollLeft || 0,
+                }));
+            };
+
+            const restoreState = () => {
+                const raw = sessionStorage.getItem(stateKey);
+                if (!raw) return;
+                sessionStorage.removeItem(stateKey);
+
+                try {
+                    const state = JSON.parse(raw);
+                    if (search && state.search) {
+                        search.value = state.search;
+                        filterRows();
+                    }
+                    window.requestAnimationFrame(() => {
+                        if (tableWrap) {
+                            tableWrap.scrollTop = Number(state.tableTop || 0);
+                            tableWrap.scrollLeft = Number(state.tableLeft || 0);
+                        }
+                        if (topScroll) topScroll.scrollLeft = Number(state.tableLeft || 0);
+                        window.scrollTo(0, Number(state.pageY || 0));
+                    });
+                } catch (error) {
+                    sessionStorage.removeItem(stateKey);
+                }
+            };
+
+            restoreState();
+
             const setAutosaveStatus = (message) => {
                 if (autosaveStatus) autosaveStatus.textContent = message;
             };
@@ -340,6 +376,7 @@
                     }
 
                     setAutosaveStatus('Salvo automaticamente. Atualizando resultados...');
+                    saveState();
                     window.setTimeout(() => window.location.reload(), 450);
                 } catch (error) {
                     setAutosaveStatus('Erro ao salvar.');
