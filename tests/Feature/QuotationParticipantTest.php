@@ -125,6 +125,29 @@ class QuotationParticipantTest extends TestCase
         $this->assertDatabaseHas('quotation_prices', ['purchase_list_item_id' => $item->id]);
     }
 
+    public function test_price_autosave_can_update_a_single_price_field(): void
+    {
+        [$company, $user] = $this->companyWithUser();
+        $supplier = $this->merchandiseSupplier($company);
+        $quotation = $this->quotation($company, $user);
+        $participant = $quotation->participants()->create(['supplier_id' => $supplier->id]);
+        $item = $quotation->purchaseList->items()->first();
+
+        $this->actingAs($user)
+            ->putJson("/cotacoes/{$quotation->id}/precos", [
+                'prices' => [$item->id => [$participant->id => 12.34]],
+            ])
+            ->assertOk()
+            ->assertJson(['message' => 'Precos atualizados.']);
+
+        $this->assertDatabaseHas('quotation_prices', [
+            'purchase_list_item_id' => $item->id,
+            'quotation_supplier_id' => $participant->id,
+            'supplier_id' => $supplier->id,
+            'unit_price' => 12.34,
+        ]);
+    }
+
     private function companyWithUser(): array
     {
         $company = Company::create([

@@ -171,18 +171,29 @@ class QuotationController extends Controller
                 ], [
                     'supplier_id' => $participant->supplier_id,
                     'unit_price' => $value,
-                    'is_selected_winner' => (string) ($selectedWinners[$itemId] ?? '') === (string) $participant->id,
                 ]);
             }
+        }
 
-            if (! array_key_exists($itemId, $selectedWinners)) {
+        foreach ($selectedWinners as $itemId => $participantId) {
+            $participant = $cotacao->participants()->whereKey($participantId)->first();
+            if (! $participant) {
+                continue;
+            }
+
+            $selectedPrice = $cotacao->prices()
+                ->where('purchase_list_item_id', $itemId)
+                ->where('quotation_supplier_id', $participant->id)
+                ->first();
+            if (! $selectedPrice || (float) $selectedPrice->unit_price <= 0) {
                 continue;
             }
 
             $cotacao->prices()
                 ->where('purchase_list_item_id', $itemId)
-                ->where('quotation_supplier_id', '!=', $selectedWinners[$itemId])
+                ->where('quotation_supplier_id', '!=', $participant->id)
                 ->update(['is_selected_winner' => false]);
+            $selectedPrice->update(['is_selected_winner' => true]);
         }
 
         if ($request->expectsJson()) {

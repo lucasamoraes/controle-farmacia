@@ -306,7 +306,19 @@
                 if (autosaveStatus) autosaveStatus.textContent = message;
             };
 
-            const saveMap = async () => {
+            const fieldData = (field) => {
+                const data = new FormData();
+                const token = priceForm?.querySelector('input[name="_token"]')?.value;
+                const method = priceForm?.querySelector('input[name="_method"]')?.value || 'PUT';
+
+                if (token) data.append('_token', token);
+                data.append('_method', method);
+                data.append(field.name, field.value);
+
+                return data;
+            };
+
+            const saveMap = async (field) => {
                 if (!priceForm || autosaving) return;
                 autosaving = true;
                 setAutosaveStatus('Salvando...');
@@ -314,7 +326,7 @@
                 try {
                     const response = await fetch(priceForm.action, {
                         method: 'POST',
-                        body: new FormData(priceForm),
+                        body: fieldData(field),
                         headers: {
                             'Accept': 'application/json',
                             'X-Requested-With': 'XMLHttpRequest',
@@ -336,6 +348,14 @@
                 }
             };
 
+            priceForm?.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const field = document.activeElement?.matches?.('[data-quote-autosave]')
+                    ? document.activeElement
+                    : null;
+                if (field) saveMap(field);
+            });
+
             document.querySelectorAll('[data-quote-autosave]').forEach((field) => {
                 field.dataset.previousValue = field.value;
                 field.addEventListener('focus', () => {
@@ -349,7 +369,7 @@
                     }
 
                     window.clearTimeout(autosaveTimer);
-                    autosaveTimer = window.setTimeout(saveMap, 350);
+                    autosaveTimer = window.setTimeout(() => saveMap(field), 350);
                 });
             });
         })();
