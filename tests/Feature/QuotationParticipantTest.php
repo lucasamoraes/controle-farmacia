@@ -76,6 +76,55 @@ class QuotationParticipantTest extends TestCase
         $this->assertDatabaseHas('quotation_prices', ['quotation_supplier_id' => $second->id]);
     }
 
+    public function test_finance_user_can_remove_item_from_quotation_map(): void
+    {
+        [$company, $user] = $this->companyWithUser();
+        $supplier = $this->merchandiseSupplier($company);
+        $quotation = $this->quotation($company, $user);
+        $participant = $quotation->participants()->create(['supplier_id' => $supplier->id]);
+        $item = $quotation->purchaseList->items()->first();
+
+        $quotation->prices()->create([
+            'purchase_list_item_id' => $item->id,
+            'quotation_supplier_id' => $participant->id,
+            'supplier_id' => $supplier->id,
+            'unit_price' => 10,
+        ]);
+
+        $this->actingAs($user)
+            ->delete("/cotacoes/{$quotation->id}/itens/{$item->id}")
+            ->assertRedirect("/cotacoes/{$quotation->id}");
+
+        $this->assertDatabaseMissing('purchase_list_items', ['id' => $item->id]);
+        $this->assertDatabaseMissing('quotation_prices', ['purchase_list_item_id' => $item->id]);
+    }
+
+    public function test_zero_quantity_removes_item_when_saving_quotation_prices(): void
+    {
+        [$company, $user] = $this->companyWithUser();
+        $supplier = $this->merchandiseSupplier($company);
+        $quotation = $this->quotation($company, $user);
+        $participant = $quotation->participants()->create(['supplier_id' => $supplier->id]);
+        $item = $quotation->purchaseList->items()->first();
+
+        $quotation->prices()->create([
+            'purchase_list_item_id' => $item->id,
+            'quotation_supplier_id' => $participant->id,
+            'supplier_id' => $supplier->id,
+            'unit_price' => 10,
+        ]);
+
+        $this->actingAs($user)
+            ->put("/cotacoes/{$quotation->id}/precos", [
+                'quantities' => [$item->id => 0],
+                'prices' => [$item->id => [$participant->id => 10]],
+            ])
+            ->assertRedirect("/cotacoes/{$quotation->id}");
+
+        $this->assertDatabaseMissing('purchase_list_items', ['id' => $item->id]);
+        $this->assertDatabaseMissing('quotation_prices', ['purchase_list_item_id' => $item->id]);
+    }
+
     private function companyWithUser(): array
     {
         $company = Company::create([

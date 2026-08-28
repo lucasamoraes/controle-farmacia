@@ -147,6 +147,7 @@ Route::middleware('auth')->group(function () {
         Route::get('cotacoes/{cotacao}', [QuotationController::class, 'show'])->name('cotacoes.show');
         Route::post('cotacoes/{cotacao}/fornecedores', [QuotationController::class, 'addSupplier'])->name('cotacoes.fornecedores.store');
         Route::delete('cotacoes/{cotacao}/participantes/{participante}', [QuotationController::class, 'removeSupplier'])->name('cotacoes.fornecedores.destroy');
+        Route::delete('cotacoes/{cotacao}/itens/{item}', [QuotationController::class, 'removeItem'])->name('cotacoes.itens.destroy');
         Route::put('cotacoes/{cotacao}/precos', [QuotationController::class, 'updatePrices'])->name('cotacoes.precos.update');
         Route::get('cotacoes/{cotacao}/exportar-lista', [QuotationController::class, 'exportList'])->name('cotacoes.export-list');
         Route::post('cotacoes/{cotacao}/participantes/{participante}/importar-precos', [QuotationController::class, 'importSupplierPrices'])->name('cotacoes.import-prices');

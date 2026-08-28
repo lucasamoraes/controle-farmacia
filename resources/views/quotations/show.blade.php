@@ -21,6 +21,8 @@
     .quote-table .quote-supplier-col { min-width:128px; width:128px; }
     .quote-table .quote-winner-col { min-width:150px; width:150px; }
     .quote-product-name { display:block; line-height:1.25; overflow-wrap:anywhere; }
+    .quote-product-cell { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:start; }
+    .quote-remove-item { width:26px; height:26px; min-height:26px; padding:0; border-radius:999px; font-size:16px; line-height:1; flex:none; }
     .quote-table input[type="number"] { min-height:38px; padding:8px; }
     .quote-price-input { width:100% !important; min-width:0; }
     .quote-supplier-menu { position:relative; }
@@ -32,7 +34,8 @@
     .quote-supplier-actions { position:absolute; top:38px; left:0; z-index:20; min-width:136px; background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px; box-shadow:0 14px 32px rgba(15,23,42,.14); display:grid; gap:6px; }
     .quote-supplier-actions .btn { width:100%; }
     .quote-table tbody tr[hidden] { display:none; }
-    .quote-pager { display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; color:var(--muted); font-size:13px; }
+    .quote-map-search { min-width:260px; max-width:420px; flex:1; }
+    .quote-map-info { margin-top:12px; color:var(--muted); font-size:13px; }
 </style>
 
 @section('content')
@@ -119,17 +122,10 @@
         <div class="quote-toolbar">
             <div>
                 <h2 class="panel-title">Mapa de cotacao</h2>
-                <p class="subtitle">Use a rolagem horizontal; produto, quantidade e cabecalho ficam fixos para facilitar cotações grandes.</p>
+                <p class="subtitle">Use a rolagem horizontal; produto, quantidade e cabecalho ficam fixos para facilitar cotacoes grandes.</p>
             </div>
-            <label>Itens por pagina
-                <select data-quote-page-size>
-                    <option value="10">10</option>
-                    <option value="20" selected>20</option>
-                    <option value="40">40</option>
-                    <option value="80">80</option>
-                    <option value="100">100</option>
-                    <option value="all">Todos</option>
-                </select>
+            <label class="quote-map-search">Buscar produto no mapa
+                <input type="search" data-quote-search placeholder="Digite parte do nome do produto" autocomplete="off">
             </label>
         </div>
         <form method="post" action="{{ route('cotacoes.precos.update', $quotation) }}" data-confirm-message="Deseja salvar os precos desta cotacao?" data-confirm-button="Salvar">
@@ -163,17 +159,24 @@
                         $winner = $winners[$item->id] ?? null;
                         $lastPrice = (float) ($item->product?->last_purchase_price ?? 0);
                     @endphp
-                    <tr data-quote-row>
+                    <tr data-quote-row data-quote-search-text="{{ mb_strtolower($item->description) }}">
                         <td class="sticky-product">
-                            <strong class="quote-product-name">{{ $item->description }}</strong>
-                            @if ($item->product?->image_url)
-                                <br><a href="{{ $item->product->image_url }}" target="_blank" style="color:var(--brand);">imagem</a>
-                            @endif
+                            <div class="quote-product-cell">
+                                <div>
+                                    <strong class="quote-product-name">{{ $item->description }}</strong>
+                                    @if ($item->product?->image_url)
+                                        <a href="{{ $item->product->image_url }}" target="_blank" style="color:var(--brand); font-size:12px;">imagem</a>
+                                    @endif
+                                </div>
+                                @if ($quotation->status !== 'finalized')
+                                    <button class="btn small danger quote-remove-item" type="submit" form="quote-remove-item-{{ $item->id }}" title="Remover produto da cotacao" aria-label="Remover {{ $item->description }}">&times;</button>
+                                @endif
+                            </div>
                         </td>
                         <td class="sticky-qty">
                             <div style="display:grid; gap:4px; width:86px;">
-                                <input type="number" step="1" min="1" name="quantities[{{ $item->id }}]" value="{{ (float) $item->quantity }}" style="width:86px;">
-                                <span style="color:var(--muted); font-size:12px;">{{ $item->unit }}</span>
+                                <input type="number" step="1" min="0" name="quantities[{{ $item->id }}]" value="{{ (float) $item->quantity }}" title="Use 0 para remover este produto da cotacao" style="width:86px;">
+                                <span style="color:var(--muted); font-size:12px;">{{ $item->unit }} | 0 remove</span>
                             </div>
                         </td>
                         <td class="quote-last-price">{{ $lastPrice > 0 ? $fmtMoney($lastPrice) : '-' }}</td>
@@ -223,19 +226,20 @@
                 @endforelse
                 </tbody>
             </table></div>
-            <div class="quote-pager">
-                <span data-quote-page-info></span>
-                <div class="actions">
-                    <button class="btn small secondary" type="button" data-quote-page-prev>Anterior</button>
-                    <button class="btn small secondary" type="button" data-quote-page-next>Proxima</button>
-                </div>
-            </div>
+            <div class="quote-map-info" data-quote-map-info></div>
             @if ($participants->isNotEmpty())
                 <div class="actions" style="justify-content:flex-end; margin-top:14px;">
                     <button class="btn" type="submit">Salvar precos</button>
                 </div>
             @endif
         </form>
+        @if ($quotation->status !== 'finalized')
+            @foreach ($list->items as $item)
+                <form id="quote-remove-item-{{ $item->id }}" method="post" action="{{ route('cotacoes.itens.destroy', [$quotation, $item]) }}" data-confirm-message="Deseja remover {{ $item->description }} desta cotacao? Os precos lancados para este produto tambem serao removidos." data-confirm-button="Remover" data-confirm-danger="1">
+                    @csrf @method('DELETE')
+                </form>
+            @endforeach
+        @endif
     </section>
 
     <script>
@@ -244,11 +248,8 @@
             const topScroll = document.querySelector('[data-quote-scroll-top]');
             const topInner = document.querySelector('[data-quote-scroll-top-inner]');
             const rows = [...document.querySelectorAll('[data-quote-row]')];
-            const pageSize = document.querySelector('[data-quote-page-size]');
-            const pageInfo = document.querySelector('[data-quote-page-info]');
-            const prev = document.querySelector('[data-quote-page-prev]');
-            const next = document.querySelector('[data-quote-page-next]');
-            let page = 1;
+            const search = document.querySelector('[data-quote-search]');
+            const mapInfo = document.querySelector('[data-quote-map-info]');
 
             const syncWidth = () => {
                 if (tableWrap && topInner) topInner.style.width = `${tableWrap.scrollWidth}px`;
@@ -270,32 +271,33 @@
                 });
             });
 
-            const renderPage = () => {
-                if (!pageSize || rows.length === 0) return;
+            const normalize = (value) => value
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '');
 
-                const selected = pageSize.value;
-                const size = selected === 'all' ? rows.length : Number(selected);
-                const totalPages = Math.max(1, Math.ceil(rows.length / size));
-                page = Math.min(page, totalPages);
-                const start = (page - 1) * size;
-                const end = start + size;
+            const filterRows = () => {
+                const term = normalize(search?.value || '');
+                let visible = 0;
 
-                rows.forEach((row, index) => {
-                    row.hidden = !(index >= start && index < end);
+                rows.forEach((row) => {
+                    const haystack = normalize(row.dataset.quoteSearchText || row.textContent || '');
+                    const matches = !term || haystack.includes(term);
+                    row.hidden = !matches;
+                    if (matches) visible += 1;
                 });
 
-                if (pageInfo) {
-                    pageInfo.textContent = `Mostrando ${rows.length === 0 ? 0 : start + 1} a ${Math.min(end, rows.length)} de ${rows.length} itens`;
+                if (mapInfo) {
+                    mapInfo.textContent = term
+                        ? `Mostrando ${visible} de ${rows.length} produtos`
+                        : `Mostrando todos os ${rows.length} produtos`;
                 }
-                if (prev) prev.disabled = page <= 1;
-                if (next) next.disabled = page >= totalPages;
+
                 syncWidth();
             };
 
-            pageSize?.addEventListener('change', () => { page = 1; renderPage(); });
-            prev?.addEventListener('click', () => { page = Math.max(1, page - 1); renderPage(); });
-            next?.addEventListener('click', () => { page += 1; renderPage(); });
-            renderPage();
+            search?.addEventListener('input', filterRows);
+            filterRows();
         })();
     </script>
 @endsection

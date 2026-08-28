@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\PurchaseList;
+use App\Models\PurchaseListItem;
 use App\Models\Quotation;
 use App\Models\QuotationSupplier;
 use App\Models\Supplier;
@@ -99,6 +100,19 @@ class QuotationController extends Controller
         return redirect()->route('cotacoes.show', $cotacao)->with('status', 'Fornecedor removido da cotacao.');
     }
 
+    public function removeItem(Quotation $cotacao, PurchaseListItem $item): RedirectResponse
+    {
+        $this->abortUnlessCompanyQuotation($cotacao);
+        abort_unless(Auth::user()->canWriteFinance($this->company()), 403);
+        abort_unless($item->purchase_list_id === $cotacao->purchase_list_id, 404);
+        abort_if($cotacao->status === 'finalized', 403);
+
+        $cotacao->prices()->where('purchase_list_item_id', $item->id)->delete();
+        $item->delete();
+
+        return redirect()->route('cotacoes.show', $cotacao)->with('status', 'Produto removido da cotacao.');
+    }
+
     public function updatePrices(Request $request, Quotation $cotacao): RedirectResponse
     {
         $this->abortUnlessCompanyQuotation($cotacao);
@@ -106,6 +120,7 @@ class QuotationController extends Controller
         $prices = $request->input('prices', []);
         $quantities = $request->input('quantities', []);
         $selectedWinners = $request->input('selected_winners', []);
+        $removedItemIds = [];
 
         foreach ($quantities as $itemId => $quantity) {
             $item = $cotacao->purchaseList->items()->whereKey($itemId)->first();
@@ -113,13 +128,29 @@ class QuotationController extends Controller
                 continue;
             }
 
-            $quantity = (float) str_replace(',', '.', (string) $quantity);
+            $quantity = trim((string) $quantity);
+            if ($quantity === '') {
+                continue;
+            }
+
+            $quantity = (float) str_replace(',', '.', $quantity);
+            if ($quantity <= 0) {
+                $cotacao->prices()->where('purchase_list_item_id', $item->id)->delete();
+                $item->delete();
+                $removedItemIds[] = (string) $itemId;
+                continue;
+            }
+
             if ($quantity > 0) {
                 $item->update(['quantity' => $quantity]);
             }
         }
 
         foreach ($prices as $itemId => $supplierPrices) {
+            if (in_array((string) $itemId, $removedItemIds, true)) {
+                continue;
+            }
+
             foreach ($supplierPrices as $participantId => $value) {
                 $participant = $cotacao->participants()->whereKey($participantId)->first();
                 if (! $participant) {
