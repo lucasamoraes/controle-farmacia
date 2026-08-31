@@ -427,9 +427,24 @@ class DashboardController extends Controller
             ->orderBy('sale_date')
             ->get()
             ->groupBy(fn ($sale) => $sale->sale_date->format('Y-m'));
+        $registeredMonthKeys = $company->monthlyRevenues()
+            ->whereBetween('reference_month', [$yearStart->toDateString(), $operationalMonth->toDateString()])
+            ->where(function ($query) {
+                $query->where('delivery_sales_count', '>', 0)
+                    ->orWhere('counter_sales_count', '>', 0);
+            })
+            ->orderBy('reference_month')
+            ->get()
+            ->map(fn ($row) => $row->reference_month->format('Y-m'));
+        $monthKeys = $registeredMonthKeys
+            ->merge($sales->keys())
+            ->unique()
+            ->sort()
+            ->values();
         $months = collect();
 
-        foreach ($sales as $monthKey => $rows) {
+        foreach ($monthKeys as $monthKey) {
+            $rows = $sales->get($monthKey, collect());
             $month = Carbon::createFromFormat('Y-m-d', $monthKey.'-01')->startOfMonth();
             $periods = [
                 'first' => $rows->filter(fn ($sale) => (int) $sale->sale_date->format('d') <= 10),
@@ -449,8 +464,6 @@ class DashboardController extends Controller
         }
 
         return $months
-            ->filter(fn ($row) => collect(['first', 'second', 'third'])
-                ->contains(fn ($key) => $row[$key]['delivery_ticket'] > 0 || $row[$key]['counter_ticket'] > 0))
             ->sortByDesc('sort')
             ->values()
             ->all();

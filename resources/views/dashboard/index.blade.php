@@ -315,7 +315,7 @@
             </div>
         </section>
 
-        <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-top:18px;">
+        <div class="grid" style="grid-template-columns:1fr; align-items:start; margin-top:18px;">
             <section class="card">
                 <h2 class="panel-title">Ticket medio por mes</h2>
                 <p class="subtitle" style="margin-bottom:14px;">Compara o valor medio de venda entre delivery e balcao nos meses cadastrados.</p>
@@ -530,9 +530,9 @@
                     data: {
                         labels: ticketPeriodLabels,
                         datasets: [
-                            { label: 'Delivery 1-10', data: ticketPeriods.map((row) => row.first.delivery_ticket), backgroundColor: '#1d4ed8', borderRadius: 4 },
-                            { label: 'Delivery 11-20', data: ticketPeriods.map((row) => row.second.delivery_ticket), backgroundColor: '#60a5fa', borderRadius: 4 },
-                            { label: 'Delivery 21-fechamento', data: ticketPeriods.map((row) => row.third.delivery_ticket), backgroundColor: '#bfdbfe', borderRadius: 4 }
+                            { label: 'Dias 1-10', data: ticketPeriods.map((row) => row.first.delivery_ticket), backgroundColor: '#2563eb', borderRadius: 4, stack: 'ticket' },
+                            { label: 'Dias 11-20', data: ticketPeriods.map((row) => row.second.delivery_ticket), backgroundColor: '#0f766e', borderRadius: 4, stack: 'ticket' },
+                            { label: 'Dias 21-fechamento', data: ticketPeriods.map((row) => row.third.delivery_ticket), backgroundColor: '#b7791f', borderRadius: 4, stack: 'ticket' }
                         ]
                     },
                     options: {
@@ -540,8 +540,9 @@
                         plugins: {
                             ...commonOptions.plugins,
                             title: { display: true, text: 'Delivery' },
-                            legend: { position: 'bottom', labels: { boxWidth: 10, font: { family: 'Arial' } } }
-                        }
+                            legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Arial' } } }
+                        },
+                        scales: { x: { stacked: true }, y: { ...commonOptions.scales.y, stacked: true } }
                     }
                 });
 
@@ -551,9 +552,9 @@
                     data: {
                         labels: ticketPeriodLabels,
                         datasets: [
-                            { label: 'Balcao 1-10', data: ticketPeriods.map((row) => row.first.counter_ticket), backgroundColor: '#0f766e', borderRadius: 4 },
-                            { label: 'Balcao 11-20', data: ticketPeriods.map((row) => row.second.counter_ticket), backgroundColor: '#2dd4bf', borderRadius: 4 },
-                            { label: 'Balcao 21-fechamento', data: ticketPeriods.map((row) => row.third.counter_ticket), backgroundColor: '#99f6e4', borderRadius: 4 }
+                            { label: 'Dias 1-10', data: ticketPeriods.map((row) => row.first.counter_ticket), backgroundColor: '#2563eb', borderRadius: 4, stack: 'ticket' },
+                            { label: 'Dias 11-20', data: ticketPeriods.map((row) => row.second.counter_ticket), backgroundColor: '#0f766e', borderRadius: 4, stack: 'ticket' },
+                            { label: 'Dias 21-fechamento', data: ticketPeriods.map((row) => row.third.counter_ticket), backgroundColor: '#b7791f', borderRadius: 4, stack: 'ticket' }
                         ]
                     },
                     options: {
@@ -561,8 +562,9 @@
                         plugins: {
                             ...commonOptions.plugins,
                             title: { display: true, text: 'Balcao' },
-                            legend: { position: 'bottom', labels: { boxWidth: 10, font: { family: 'Arial' } } }
-                        }
+                            legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Arial' } } }
+                        },
+                        scales: { x: { stacked: true }, y: { ...commonOptions.scales.y, stacked: true } }
                     }
                 });
 
