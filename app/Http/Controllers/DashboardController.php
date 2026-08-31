@@ -84,6 +84,8 @@ class DashboardController extends Controller
             'monthlyRevenueChart' => $this->monthlyRevenueChart($company),
             'revenueProjection' => $this->revenueProjection($company),
             'salesPeriodComparisonChart' => $this->salesPeriodComparisonChart($company),
+            'monthlyChannelTicketChart' => $this->monthlyChannelTicketChart($company),
+            'ticketPeriodComparisonChart' => $this->ticketPeriodComparisonChart($company),
             'weekdayAverageChart' => $this->weekdayAverageChart($company, $dateStart, $dateEnd),
             'channelRevenueChart' => $this->channelRevenueChart($company),
             'monthlyExpenseChart' => $this->monthlyExpenseChart($company),
@@ -383,6 +385,90 @@ class DashboardController extends Controller
                 ];
             })
             ->all();
+    }
+
+    private function monthlyChannelTicketChart(Company $company): array
+    {
+        $operationalMonth = $this->operationalDate($company)->startOfMonth();
+        $yearStart = $operationalMonth->copy()->startOfYear();
+
+        return $company->monthlyRevenues()
+            ->whereBetween('reference_month', [$yearStart->toDateString(), $operationalMonth->toDateString()])
+            ->where(function ($query) {
+                $query->where('delivery_sales_count', '>', 0)
+                    ->orWhere('counter_sales_count', '>', 0);
+            })
+            ->orderByDesc('reference_month')
+            ->get()
+            ->map(function ($row) {
+                $deliverySales = (int) $row->delivery_sales_count;
+                $counterSales = (int) $row->counter_sales_count;
+                $deliveryRevenue = (float) $row->delivery_revenue;
+                $counterRevenue = (float) $row->counter_revenue;
+
+                return [
+                    'label' => $row->reference_month->format('m/Y'),
+                    'delivery_ticket' => $deliverySales > 0 ? round($deliveryRevenue / $deliverySales, 2) : 0,
+                    'counter_ticket' => $counterSales > 0 ? round($counterRevenue / $counterSales, 2) : 0,
+                    'delivery_sales_count' => $deliverySales,
+                    'counter_sales_count' => $counterSales,
+                ];
+            })
+            ->all();
+    }
+
+    private function ticketPeriodComparisonChart(Company $company): array
+    {
+        $operationalDate = $this->operationalDate($company);
+        $operationalMonth = $operationalDate->copy()->startOfMonth();
+        $yearStart = $operationalMonth->copy()->startOfYear();
+        $sales = $company->dailySales()
+            ->whereBetween('sale_date', [$yearStart->toDateString(), $operationalDate->toDateString()])
+            ->orderBy('sale_date')
+            ->get()
+            ->groupBy(fn ($sale) => $sale->sale_date->format('Y-m'));
+        $months = collect();
+
+        foreach ($sales as $monthKey => $rows) {
+            $month = Carbon::createFromFormat('Y-m-d', $monthKey.'-01')->startOfMonth();
+            $periods = [
+                'first' => $rows->filter(fn ($sale) => (int) $sale->sale_date->format('d') <= 10),
+                'second' => $rows->filter(fn ($sale) => (int) $sale->sale_date->format('d') >= 11 && (int) $sale->sale_date->format('d') <= 20),
+                'third' => $rows->filter(fn ($sale) => (int) $sale->sale_date->format('d') >= 21),
+            ];
+
+            $months->push([
+                'label' => $month->format('m/Y'),
+                'sort' => $month->format('Y-m'),
+                'is_current' => $month->equalTo($operationalMonth),
+                'last_day_recorded' => $month->equalTo($operationalMonth) ? (int) $operationalDate->format('d') : $month->daysInMonth,
+                'first' => $this->ticketPeriodRow($periods['first']),
+                'second' => $this->ticketPeriodRow($periods['second']),
+                'third' => $this->ticketPeriodRow($periods['third']),
+            ]);
+        }
+
+        return $months
+            ->filter(fn ($row) => collect(['first', 'second', 'third'])
+                ->contains(fn ($key) => $row[$key]['delivery_ticket'] > 0 || $row[$key]['counter_ticket'] > 0))
+            ->sortByDesc('sort')
+            ->values()
+            ->all();
+    }
+
+    private function ticketPeriodRow($rows): array
+    {
+        $deliverySales = (int) $rows->sum('delivery_sales_count');
+        $counterSales = (int) $rows->sum('counter_sales_count');
+        $deliveryRevenue = (float) $rows->sum('delivery_revenue');
+        $counterRevenue = (float) $rows->sum('counter_revenue');
+
+        return [
+            'delivery_ticket' => $deliverySales > 0 ? round($deliveryRevenue / $deliverySales, 2) : 0,
+            'counter_ticket' => $counterSales > 0 ? round($counterRevenue / $counterSales, 2) : 0,
+            'delivery_sales_count' => $deliverySales,
+            'counter_sales_count' => $counterSales,
+        ];
     }
 
     private function monthlyExpenseChart(Company $company): array

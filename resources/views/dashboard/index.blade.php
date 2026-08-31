@@ -314,6 +314,46 @@
                 @endforelse
             </div>
         </section>
+
+        <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-top:18px;">
+            <section class="card">
+                <h2 class="panel-title">Ticket medio por mes</h2>
+                <p class="subtitle" style="margin-bottom:14px;">Compara o valor medio de venda entre delivery e balcao nos meses cadastrados.</p>
+                <div class="chart-box"><canvas id="monthlyTicketChart"></canvas></div>
+                <div class="bar-list">
+                    @forelse ($monthlyChannelTicketChart as $row)
+                        <div class="bar-row">
+                            <div class="bar-meta">
+                                <span>{{ $row['label'] }}</span>
+                                <span>Delivery {{ $fmtMoney($row['delivery_ticket']) }} | Balcao {{ $fmtMoney($row['counter_ticket']) }}</span>
+                            </div>
+                            <p class="subtitle" style="font-size:12px;">{{ number_format($row['delivery_sales_count'], 0, ',', '.') }} vendas delivery | {{ number_format($row['counter_sales_count'], 0, ',', '.') }} vendas balcao</p>
+                        </div>
+                    @empty
+                        <p class="subtitle">Cadastre quantidade e faturamento por canal para gerar ticket medio.</p>
+                    @endforelse
+                </div>
+            </section>
+
+            <section class="card">
+                <h2 class="panel-title">Ticket medio por blocos do mes</h2>
+                <p class="subtitle" style="margin-bottom:14px;">Mostra se o ticket muda entre os dias 1-10, 11-20 e 21-fechamento em cada mes.</p>
+                <div class="chart-box"><canvas id="ticketPeriodChart"></canvas></div>
+                <div class="bar-list">
+                    @forelse ($ticketPeriodComparisonChart as $row)
+                        <div class="bar-row">
+                            <div class="bar-meta">
+                                <span>{{ $row['label'] }} @if($row['is_current']) <small style="color:var(--brand);">ate dia {{ $row['last_day_recorded'] }}</small> @endif</span>
+                                <span>1-10: D {{ $fmtMoney($row['first']['delivery_ticket']) }} / B {{ $fmtMoney($row['first']['counter_ticket']) }}</span>
+                            </div>
+                            <p class="subtitle" style="font-size:12px;">11-20: D {{ $fmtMoney($row['second']['delivery_ticket']) }} / B {{ $fmtMoney($row['second']['counter_ticket']) }} | 21-fech.: D {{ $fmtMoney($row['third']['delivery_ticket']) }} / B {{ $fmtMoney($row['third']['counter_ticket']) }}</p>
+                        </div>
+                    @empty
+                        <p class="subtitle">Cadastre vendas diarias com quantidade por canal para gerar a analise por blocos.</p>
+                    @endforelse
+                </div>
+            </section>
+        </div>
     @endif
 
     @if ($dashboardTab === 'funcionarios')
@@ -400,6 +440,8 @@
                 const salesPeriods = @json($salesPeriodComparisonChart);
                 const weekdays = @json($weekdayAverageChart);
                 const channels = @json($channelRevenueChart);
+                const monthlyTickets = @json($monthlyChannelTicketChart);
+                const ticketPeriods = @json($ticketPeriodComparisonChart);
                 const expenses = @json($monthlyExpenseChart);
                 const categories = @json($categoryTotals->values());
                 const employeeMovements = @json($employeeDashboard['employeeMovementDetails']);
@@ -464,6 +506,42 @@
                             }
                         },
                         scales: { x: { stacked: false }, y: commonOptions.scales.y }
+                    }
+                });
+
+                const monthlyTicketCanvas = document.getElementById('monthlyTicketChart');
+                if (monthlyTicketCanvas) new Chart(monthlyTicketCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: monthlyTickets.map((row) => row.label),
+                        datasets: [
+                            { label: 'Ticket delivery', data: monthlyTickets.map((row) => row.delivery_ticket), backgroundColor: '#2563eb', borderRadius: 4 },
+                            { label: 'Ticket balcao', data: monthlyTickets.map((row) => row.counter_ticket), backgroundColor: '#0f766e', borderRadius: 4 }
+                        ]
+                    },
+                    options: commonOptions
+                });
+
+                const ticketPeriodCanvas = document.getElementById('ticketPeriodChart');
+                if (ticketPeriodCanvas) new Chart(ticketPeriodCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: ticketPeriods.map((row) => row.is_current ? `${row.label} ate dia ${row.last_day_recorded}` : row.label),
+                        datasets: [
+                            { label: 'Delivery 1-10', data: ticketPeriods.map((row) => row.first.delivery_ticket), backgroundColor: '#1d4ed8', borderRadius: 4 },
+                            { label: 'Delivery 11-20', data: ticketPeriods.map((row) => row.second.delivery_ticket), backgroundColor: '#60a5fa', borderRadius: 4 },
+                            { label: 'Delivery 21-fech.', data: ticketPeriods.map((row) => row.third.delivery_ticket), backgroundColor: '#bfdbfe', borderRadius: 4 },
+                            { label: 'Balcao 1-10', data: ticketPeriods.map((row) => row.first.counter_ticket), backgroundColor: '#0f766e', borderRadius: 4 },
+                            { label: 'Balcao 11-20', data: ticketPeriods.map((row) => row.second.counter_ticket), backgroundColor: '#2dd4bf', borderRadius: 4 },
+                            { label: 'Balcao 21-fech.', data: ticketPeriods.map((row) => row.third.counter_ticket), backgroundColor: '#99f6e4', borderRadius: 4 }
+                        ]
+                    },
+                    options: {
+                        ...commonOptions,
+                        plugins: {
+                            ...commonOptions.plugins,
+                            legend: { position: 'bottom', labels: { boxWidth: 10, font: { family: 'Arial' } } }
+                        }
                     }
                 });
 
