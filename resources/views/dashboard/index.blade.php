@@ -337,16 +337,17 @@
 
             <section class="card">
                 <h2 class="panel-title">Ticket medio por blocos do mes</h2>
-                <p class="subtitle" style="margin-bottom:14px;">Mostra se o ticket muda entre os dias 1-10, 11-20 e 21-fechamento em cada mes.</p>
-                <div class="chart-box"><canvas id="ticketPeriodChart"></canvas></div>
+                <p class="subtitle" style="margin-bottom:14px;">Mostra se o ticket muda entre os dias 1-10, 11-20 e 21-fechamento em cada mes, separado por canal.</p>
+                <div class="chart-box" style="margin-bottom:16px;"><canvas id="deliveryTicketPeriodChart"></canvas></div>
+                <div class="chart-box"><canvas id="counterTicketPeriodChart"></canvas></div>
                 <div class="bar-list">
                     @forelse ($ticketPeriodComparisonChart as $row)
                         <div class="bar-row">
                             <div class="bar-meta">
                                 <span>{{ $row['label'] }} @if($row['is_current']) <small style="color:var(--brand);">ate dia {{ $row['last_day_recorded'] }}</small> @endif</span>
-                                <span>1-10: D {{ $fmtMoney($row['first']['delivery_ticket']) }} / B {{ $fmtMoney($row['first']['counter_ticket']) }}</span>
+                                <span>Delivery 1-10 {{ $fmtMoney($row['first']['delivery_ticket']) }} | Balcao 1-10 {{ $fmtMoney($row['first']['counter_ticket']) }}</span>
                             </div>
-                            <p class="subtitle" style="font-size:12px;">11-20: D {{ $fmtMoney($row['second']['delivery_ticket']) }} / B {{ $fmtMoney($row['second']['counter_ticket']) }} | 21-fech.: D {{ $fmtMoney($row['third']['delivery_ticket']) }} / B {{ $fmtMoney($row['third']['counter_ticket']) }}</p>
+                            <p class="subtitle" style="font-size:12px;">Delivery 11-20 {{ $fmtMoney($row['second']['delivery_ticket']) }} | Delivery 21-fech. {{ $fmtMoney($row['third']['delivery_ticket']) }}<br>Balcao 11-20 {{ $fmtMoney($row['second']['counter_ticket']) }} | Balcao 21-fech. {{ $fmtMoney($row['third']['counter_ticket']) }}</p>
                         </div>
                     @empty
                         <p class="subtitle">Cadastre vendas diarias com quantidade por canal para gerar a analise por blocos.</p>
@@ -522,24 +523,44 @@
                     options: commonOptions
                 });
 
-                const ticketPeriodCanvas = document.getElementById('ticketPeriodChart');
-                if (ticketPeriodCanvas) new Chart(ticketPeriodCanvas, {
+                const ticketPeriodLabels = ticketPeriods.map((row) => row.is_current ? `${row.label} ate dia ${row.last_day_recorded}` : row.label);
+                const deliveryTicketPeriodCanvas = document.getElementById('deliveryTicketPeriodChart');
+                if (deliveryTicketPeriodCanvas) new Chart(deliveryTicketPeriodCanvas, {
                     type: 'bar',
                     data: {
-                        labels: ticketPeriods.map((row) => row.is_current ? `${row.label} ate dia ${row.last_day_recorded}` : row.label),
+                        labels: ticketPeriodLabels,
                         datasets: [
                             { label: 'Delivery 1-10', data: ticketPeriods.map((row) => row.first.delivery_ticket), backgroundColor: '#1d4ed8', borderRadius: 4 },
                             { label: 'Delivery 11-20', data: ticketPeriods.map((row) => row.second.delivery_ticket), backgroundColor: '#60a5fa', borderRadius: 4 },
-                            { label: 'Delivery 21-fech.', data: ticketPeriods.map((row) => row.third.delivery_ticket), backgroundColor: '#bfdbfe', borderRadius: 4 },
-                            { label: 'Balcao 1-10', data: ticketPeriods.map((row) => row.first.counter_ticket), backgroundColor: '#0f766e', borderRadius: 4 },
-                            { label: 'Balcao 11-20', data: ticketPeriods.map((row) => row.second.counter_ticket), backgroundColor: '#2dd4bf', borderRadius: 4 },
-                            { label: 'Balcao 21-fech.', data: ticketPeriods.map((row) => row.third.counter_ticket), backgroundColor: '#99f6e4', borderRadius: 4 }
+                            { label: 'Delivery 21-fechamento', data: ticketPeriods.map((row) => row.third.delivery_ticket), backgroundColor: '#bfdbfe', borderRadius: 4 }
                         ]
                     },
                     options: {
                         ...commonOptions,
                         plugins: {
                             ...commonOptions.plugins,
+                            title: { display: true, text: 'Delivery' },
+                            legend: { position: 'bottom', labels: { boxWidth: 10, font: { family: 'Arial' } } }
+                        }
+                    }
+                });
+
+                const counterTicketPeriodCanvas = document.getElementById('counterTicketPeriodChart');
+                if (counterTicketPeriodCanvas) new Chart(counterTicketPeriodCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: ticketPeriodLabels,
+                        datasets: [
+                            { label: 'Balcao 1-10', data: ticketPeriods.map((row) => row.first.counter_ticket), backgroundColor: '#0f766e', borderRadius: 4 },
+                            { label: 'Balcao 11-20', data: ticketPeriods.map((row) => row.second.counter_ticket), backgroundColor: '#2dd4bf', borderRadius: 4 },
+                            { label: 'Balcao 21-fechamento', data: ticketPeriods.map((row) => row.third.counter_ticket), backgroundColor: '#99f6e4', borderRadius: 4 }
+                        ]
+                    },
+                    options: {
+                        ...commonOptions,
+                        plugins: {
+                            ...commonOptions.plugins,
+                            title: { display: true, text: 'Balcao' },
                             legend: { position: 'bottom', labels: { boxWidth: 10, font: { family: 'Arial' } } }
                         }
                     }
