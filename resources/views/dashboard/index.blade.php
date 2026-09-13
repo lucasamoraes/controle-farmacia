@@ -557,7 +557,14 @@
                         ...commonOptions,
                         plugins: {
                             ...commonOptions.plugins,
-                            tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.y ?? ctx.parsed.x || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}` } }
+                            tooltip: {
+                                callbacks: {
+                                    label: (ctx) => {
+                                        const parsedValue = ctx.parsed.y ?? ctx.parsed.x ?? 0;
+                                        return `${ctx.dataset.label}: ${Number(parsedValue).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
+                                    }
+                                }
+                            }
                         },
                         scales: { y: { beginAtZero: true } }
                     }

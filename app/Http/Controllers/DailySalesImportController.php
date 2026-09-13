@@ -20,7 +20,7 @@ class DailySalesImportController extends Controller
     {
         return view('imports.daily-sales', [
             'company' => $this->company(),
-            'sales' => $this->company()->dailySales()->orderByDesc('sale_date')->get(),
+            'sales' => $this->company()->dailySales()->orderByDesc('sale_date')->paginate(30),
         ]);
     }
 
