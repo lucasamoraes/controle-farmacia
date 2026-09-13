@@ -86,6 +86,7 @@ class DashboardController extends Controller
             'salesPeriodComparisonChart' => $this->salesPeriodComparisonChart($company),
             'monthlyChannelTicketChart' => $this->monthlyChannelTicketChart($company),
             'ticketPeriodComparisonChart' => $this->ticketPeriodComparisonChart($company),
+            'dailyTicketCountAverageChart' => $this->dailyTicketCountAverageChart($company),
             'weekdayAverageChart' => $this->weekdayAverageChart($company, $dateStart, $dateEnd),
             'channelRevenueChart' => $this->channelRevenueChart($company),
             'monthlyExpenseChart' => $this->monthlyExpenseChart($company),
@@ -427,7 +428,7 @@ class DashboardController extends Controller
             ->orderBy('sale_date')
             ->get()
             ->groupBy(fn ($sale) => $sale->sale_date->format('Y-m'));
-        $registeredMonthKeys = $company->monthlyRevenues()
+        $monthlyRevenueRows = $company->monthlyRevenues()
             ->whereBetween('reference_month', [$yearStart->toDateString(), $operationalMonth->toDateString()])
             ->where(function ($query) {
                 $query->where('delivery_sales_count', '>', 0)
@@ -435,7 +436,8 @@ class DashboardController extends Controller
             })
             ->orderBy('reference_month')
             ->get()
-            ->map(fn ($row) => $row->reference_month->format('Y-m'));
+            ->keyBy(fn ($row) => $row->reference_month->format('Y-m'));
+        $registeredMonthKeys = $monthlyRevenueRows->keys();
         $monthKeys = $registeredMonthKeys
             ->merge($sales->keys())
             ->unique()
@@ -446,20 +448,29 @@ class DashboardController extends Controller
         foreach ($monthKeys as $monthKey) {
             $rows = $sales->get($monthKey, collect());
             $month = Carbon::createFromFormat('Y-m-d', $monthKey.'-01')->startOfMonth();
-            $periods = [
-                'first' => $rows->filter(fn ($sale) => (int) $sale->sale_date->format('d') <= 10),
-                'second' => $rows->filter(fn ($sale) => (int) $sale->sale_date->format('d') >= 11 && (int) $sale->sale_date->format('d') <= 20),
-                'third' => $rows->filter(fn ($sale) => (int) $sale->sale_date->format('d') >= 21),
-            ];
+            $monthlyRevenue = $monthlyRevenueRows->get($monthKey);
+            $hasDailyChannelData = $rows->contains(fn ($sale) => (int) $sale->delivery_sales_count > 0 || (int) $sale->counter_sales_count > 0);
+
+            if ($hasDailyChannelData) {
+                $periods = [
+                    'first' => $this->ticketPeriodRow($rows->filter(fn ($sale) => (int) $sale->sale_date->format('d') <= 10)),
+                    'second' => $this->ticketPeriodRow($rows->filter(fn ($sale) => (int) $sale->sale_date->format('d') >= 11 && (int) $sale->sale_date->format('d') <= 20)),
+                    'third' => $this->ticketPeriodRow($rows->filter(fn ($sale) => (int) $sale->sale_date->format('d') >= 21)),
+                    'estimated' => false,
+                ];
+            } else {
+                $periods = $this->estimatedTicketPeriodsFromMonthlyRevenue($monthlyRevenue);
+            }
 
             $months->push([
                 'label' => $month->format('m/Y'),
                 'sort' => $month->format('Y-m'),
                 'is_current' => $month->equalTo($operationalMonth),
                 'last_day_recorded' => $month->equalTo($operationalMonth) ? (int) $operationalDate->format('d') : $month->daysInMonth,
-                'first' => $this->ticketPeriodRow($periods['first']),
-                'second' => $this->ticketPeriodRow($periods['second']),
-                'third' => $this->ticketPeriodRow($periods['third']),
+                'estimated' => $periods['estimated'],
+                'first' => $periods['first'],
+                'second' => $periods['second'],
+                'third' => $periods['third'],
             ]);
         }
 
@@ -482,6 +493,78 @@ class DashboardController extends Controller
             'delivery_sales_count' => $deliverySales,
             'counter_sales_count' => $counterSales,
         ];
+    }
+
+    private function estimatedTicketPeriodsFromMonthlyRevenue($revenue): array
+    {
+        $empty = [
+            'delivery_ticket' => 0,
+            'counter_ticket' => 0,
+            'delivery_sales_count' => 0,
+            'counter_sales_count' => 0,
+        ];
+
+        if (! $revenue) {
+            return ['estimated' => true, 'first' => $empty, 'second' => $empty, 'third' => $empty];
+        }
+
+        $deliverySales = (int) $revenue->delivery_sales_count;
+        $counterSales = (int) $revenue->counter_sales_count;
+        $row = [
+            'delivery_ticket' => $deliverySales > 0 ? round((float) $revenue->delivery_revenue / $deliverySales, 2) : 0,
+            'counter_ticket' => $counterSales > 0 ? round((float) $revenue->counter_revenue / $counterSales, 2) : 0,
+            'delivery_sales_count' => $deliverySales,
+            'counter_sales_count' => $counterSales,
+        ];
+
+        return [
+            'estimated' => true,
+            'first' => $row,
+            'second' => $row,
+            'third' => $row,
+        ];
+    }
+
+    private function dailyTicketCountAverageChart(Company $company): array
+    {
+        $operationalMonth = $this->operationalDate($company)->startOfMonth();
+        $operationalDate = $this->operationalDate($company);
+        $yearStart = $operationalMonth->copy()->startOfYear();
+        $dailyRows = $company->dailySales()
+            ->whereBetween('sale_date', [$yearStart->toDateString(), $operationalMonth->copy()->endOfMonth()->toDateString()])
+            ->orderBy('sale_date')
+            ->get()
+            ->groupBy(fn ($sale) => $sale->sale_date->format('Y-m'));
+        $monthlyRevenueRows = $company->monthlyRevenues()
+            ->whereBetween('reference_month', [$yearStart->toDateString(), $operationalMonth->toDateString()])
+            ->where(function ($query) {
+                $query->where('delivery_sales_count', '>', 0)
+                    ->orWhere('counter_sales_count', '>', 0);
+            })
+            ->orderBy('reference_month')
+            ->get()
+            ->keyBy(fn ($row) => $row->reference_month->format('Y-m'));
+
+        return $monthlyRevenueRows
+            ->map(function ($row, $monthKey) use ($dailyRows, $operationalMonth, $operationalDate) {
+                $month = Carbon::createFromFormat('Y-m-d', $monthKey.'-01')->startOfMonth();
+                $rows = $dailyRows->get($monthKey, collect());
+                $daysBase = $rows->count() > 0
+                    ? $rows->count()
+                    : ($month->equalTo($operationalMonth) ? (int) $operationalDate->format('d') : $month->daysInMonth);
+                $daysBase = max(1, $daysBase);
+
+                return [
+                    'label' => $month->format('m/Y'),
+                    'delivery_average_count' => round((int) $row->delivery_sales_count / $daysBase, 1),
+                    'counter_average_count' => round((int) $row->counter_sales_count / $daysBase, 1),
+                    'days_base' => $daysBase,
+                    'daily_detail' => $rows->count() > 0,
+                ];
+            })
+            ->reverse()
+            ->values()
+            ->all();
     }
 
     private function monthlyExpenseChart(Company $company): array

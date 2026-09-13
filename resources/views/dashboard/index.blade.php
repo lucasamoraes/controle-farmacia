@@ -336,6 +336,25 @@
             </section>
 
             <section class="card">
+                <h2 class="panel-title">Media de tickets por dia</h2>
+                <p class="subtitle" style="margin-bottom:14px;">Mostra a quantidade media diaria de vendas registradas em delivery e balcao.</p>
+                <div class="chart-box"><canvas id="dailyTicketCountChart"></canvas></div>
+                <div class="bar-list">
+                    @forelse ($dailyTicketCountAverageChart as $row)
+                        <div class="bar-row">
+                            <div class="bar-meta">
+                                <span>{{ $row['label'] }}</span>
+                                <span>Delivery {{ number_format($row['delivery_average_count'], 1, ',', '.') }} | Balcao {{ number_format($row['counter_average_count'], 1, ',', '.') }}</span>
+                            </div>
+                            <p class="subtitle" style="font-size:12px;">Base: {{ $row['days_base'] }} dia(s) {{ $row['daily_detail'] ? 'com venda diaria cadastrada' : 'estimados pelo mes' }}</p>
+                        </div>
+                    @empty
+                        <p class="subtitle">Cadastre quantidade de vendas por canal para gerar a media diaria.</p>
+                    @endforelse
+                </div>
+            </section>
+
+            <section class="card">
                 <h2 class="panel-title">Ticket medio por blocos do mes</h2>
                 <p class="subtitle" style="margin-bottom:14px;">Mostra se o ticket muda entre os dias 1-10, 11-20 e 21-fechamento em cada mes, separado por canal.</p>
                 <div class="chart-box" style="margin-bottom:16px;"><canvas id="deliveryTicketPeriodChart"></canvas></div>
@@ -344,7 +363,7 @@
                     @forelse ($ticketPeriodComparisonChart as $row)
                         <div class="bar-row">
                             <div class="bar-meta">
-                                <span>{{ $row['label'] }} @if($row['is_current']) <small style="color:var(--brand);">ate dia {{ $row['last_day_recorded'] }}</small> @endif</span>
+                                <span>{{ $row['label'] }} @if($row['is_current']) <small style="color:var(--brand);">ate dia {{ $row['last_day_recorded'] }}</small> @endif @if($row['estimated']) <small style="color:var(--muted);">estimado</small> @endif</span>
                                 <span>Delivery 1-10 {{ $fmtMoney($row['first']['delivery_ticket']) }} | Balcao 1-10 {{ $fmtMoney($row['first']['counter_ticket']) }}</span>
                             </div>
                             <p class="subtitle" style="font-size:12px;">Delivery 11-20 {{ $fmtMoney($row['second']['delivery_ticket']) }} | Delivery 21-fech. {{ $fmtMoney($row['third']['delivery_ticket']) }}<br>Balcao 11-20 {{ $fmtMoney($row['second']['counter_ticket']) }} | Balcao 21-fech. {{ $fmtMoney($row['third']['counter_ticket']) }}</p>
@@ -443,6 +462,7 @@
                 const channels = @json($channelRevenueChart);
                 const monthlyTickets = @json($monthlyChannelTicketChart);
                 const ticketPeriods = @json($ticketPeriodComparisonChart);
+                const dailyTicketCounts = @json($dailyTicketCountAverageChart);
                 const expenses = @json($monthlyExpenseChart);
                 const categories = @json($categoryTotals->values());
                 const employeeMovements = @json($employeeDashboard['employeeMovementDetails']);
@@ -521,6 +541,26 @@
                         ]
                     },
                     options: commonOptions
+                });
+
+                const dailyTicketCountCanvas = document.getElementById('dailyTicketCountChart');
+                if (dailyTicketCountCanvas) new Chart(dailyTicketCountCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: dailyTicketCounts.map((row) => row.label),
+                        datasets: [
+                            { label: 'Tickets/dia delivery', data: dailyTicketCounts.map((row) => row.delivery_average_count), backgroundColor: '#2563eb', borderRadius: 4 },
+                            { label: 'Tickets/dia balcao', data: dailyTicketCounts.map((row) => row.counter_average_count), backgroundColor: '#0f766e', borderRadius: 4 }
+                        ]
+                    },
+                    options: {
+                        ...commonOptions,
+                        plugins: {
+                            ...commonOptions.plugins,
+                            tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.y ?? ctx.parsed.x || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}` } }
+                        },
+                        scales: { y: { beginAtZero: true } }
+                    }
                 });
 
                 const ticketPeriodLabels = ticketPeriods.map((row) => row.is_current ? `${row.label} ate dia ${row.last_day_recorded}` : row.label);

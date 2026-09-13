@@ -92,11 +92,12 @@
     </div>
 
     <section class="card" style="margin-top:22px;">
-        <h2 class="panel-title">Ultimos lancamentos</h2>
+        <h2 class="panel-title">Historico de vendas diarias</h2>
+        <p class="subtitle" style="margin-bottom:14px;">Todos os lancamentos cadastrados aparecem aqui para consulta e edicao.</p>
         <div class="table-wrap"><table>
             <thead><tr><th>Data</th><th>Dia</th><th>Delivery</th><th>Balcao</th><th>Total</th><th></th></tr></thead>
             <tbody>
-                @forelse ($recentSales as $sale)
+                @forelse ($sales as $sale)
                     <tr>
                         <td>{{ $sale->sale_date->format('d/m/Y') }}</td>
                         <td>{{ $sale->weekday ?: '-' }}</td>
