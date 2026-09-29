@@ -99,6 +99,18 @@ class QuotationParticipantTest extends TestCase
         $this->assertDatabaseMissing('quotation_prices', ['purchase_list_item_id' => $item->id]);
     }
 
+    public function test_reopened_list_shows_remove_button_even_when_quotation_status_was_stale(): void
+    {
+        [$company, $user] = $this->companyWithUser();
+        $quotation = $this->quotation($company, $user);
+        $quotation->update(['status' => 'finalized', 'finalized_at' => now()]);
+
+        $this->actingAs($user)
+            ->get("/cotacoes/{$quotation->id}")
+            ->assertOk()
+            ->assertSee('quote-remove-item');
+    }
+
     public function test_zero_quantity_is_rejected_when_saving_quotation_prices(): void
     {
         [$company, $user] = $this->companyWithUser();

@@ -164,6 +164,13 @@ class PurchaseListController extends Controller
             'finalized_at' => $data['status'] === 'finalized' ? now() : null,
         ]);
 
+        if ($lista->quotation) {
+            $lista->quotation->update([
+                'status' => $data['status'] === 'finalized' ? 'finalized' : 'open',
+                'finalized_at' => $data['status'] === 'finalized' ? now() : null,
+            ]);
+        }
+
         return redirect()->route('listas-compras.show', $lista)->with('status', 'Status da lista atualizado.');
     }
 

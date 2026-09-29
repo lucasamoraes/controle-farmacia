@@ -3,6 +3,7 @@
 @php
     $fmtMoney = fn ($value) => 'R$ ' . number_format((float) $value, 2, ',', '.');
     $fmtPercent = fn ($value) => $value === null ? '-' : number_format((float) $value, 1, ',', '.') . '%';
+    $canEditQuotation = $list->status !== 'finalized';
 @endphp
 
 <style>
@@ -64,7 +65,7 @@
         <div class="actions">
             <a class="btn secondary" href="{{ route('listas-compras.show', $list) }}">Voltar</a>
             <a class="btn secondary" href="{{ route('cotacoes.export-list', $quotation) }}">Exportar lista Excel</a>
-            @if ($quotation->status !== 'finalized')
+            @if ($canEditQuotation)
                 <form method="post" action="{{ route('cotacoes.finalize', $quotation) }}" data-confirm-message="Deseja finalizar esta cotacao? A lista sera encerrada." data-confirm-button="Finalizar">
                     @csrf @method('PATCH')
                     <button class="btn" type="submit">Finalizar cotacao</button>
@@ -185,7 +186,7 @@
                                         <a href="{{ $item->product->image_url }}" target="_blank" style="color:var(--brand); font-size:12px;">imagem</a>
                                     @endif
                                 </div>
-                                @if ($quotation->status !== 'finalized')
+                                @if ($canEditQuotation)
                                     <button class="btn small danger quote-remove-item" type="submit" form="quote-remove-item-{{ $item->id }}" title="Remover produto da cotacao" aria-label="Remover {{ $item->description }}"><span aria-hidden="true">X</span></button>
                                 @endif
                             </div>
@@ -248,7 +249,7 @@
                 <div class="quote-autosave-status" data-quote-autosave-status>Alteracoes sao salvas automaticamente.</div>
             @endif
         </form>
-        @if ($quotation->status !== 'finalized')
+        @if ($canEditQuotation)
             @foreach ($list->items as $item)
                 <form id="quote-remove-item-{{ $item->id }}" method="post" action="{{ route('cotacoes.itens.destroy', [$quotation, $item]) }}" data-confirm-message="Deseja remover {{ $item->description }} desta cotacao? Os precos lancados para este produto tambem serao removidos." data-confirm-button="Remover" data-confirm-danger="1">
                     @csrf @method('DELETE')

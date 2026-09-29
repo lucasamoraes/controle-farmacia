@@ -106,7 +106,7 @@ class QuotationController extends Controller
         $this->abortUnlessCompanyQuotation($cotacao);
         abort_unless(Auth::user()->canWriteFinance($this->company()), 403);
         abort_unless($item->purchase_list_id === $cotacao->purchase_list_id, 404);
-        abort_if($cotacao->status === 'finalized', 403);
+        abort_if($cotacao->purchaseList->status === 'finalized', 403);
 
         $cotacao->prices()->where('purchase_list_item_id', $item->id)->delete();
         $item->delete();
@@ -118,6 +118,7 @@ class QuotationController extends Controller
     {
         $this->abortUnlessCompanyQuotation($cotacao);
         abort_unless(Auth::user()->canWriteFinance($this->company()), 403);
+        abort_if($cotacao->purchaseList->status === 'finalized', 403);
         $prices = $request->input('prices', []);
         $quantities = $request->input('quantities', []);
         $selectedWinners = $request->input('selected_winners', []);
