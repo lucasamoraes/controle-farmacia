@@ -22,7 +22,23 @@
     .quote-table .quote-winner-col { min-width:150px; width:150px; }
     .quote-product-name { display:block; line-height:1.25; overflow-wrap:anywhere; }
     .quote-product-cell { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:start; }
-    .quote-remove-item { width:26px; height:26px; min-height:26px; padding:0; border-radius:999px; font-size:16px; line-height:1; flex:none; }
+    .quote-remove-item {
+        position:relative;
+        z-index:2;
+        display:inline-flex;
+        width:28px;
+        height:28px;
+        min-width:28px;
+        min-height:28px;
+        padding:0;
+        border-radius:999px;
+        color:#fff;
+        font-family:Arial, sans-serif;
+        font-size:14px;
+        font-weight:800;
+        line-height:1;
+        flex:none;
+    }
     .quote-table input[type="number"] { min-height:38px; padding:8px; }
     .quote-price-input { width:100% !important; min-width:0; }
     .quote-supplier-menu { position:relative; }
@@ -170,7 +186,7 @@
                                     @endif
                                 </div>
                                 @if ($quotation->status !== 'finalized')
-                                    <button class="btn small danger quote-remove-item" type="submit" form="quote-remove-item-{{ $item->id }}" title="Remover produto da cotacao" aria-label="Remover {{ $item->description }}">&times;</button>
+                                    <button class="btn small danger quote-remove-item" type="submit" form="quote-remove-item-{{ $item->id }}" title="Remover produto da cotacao" aria-label="Remover {{ $item->description }}"><span aria-hidden="true">X</span></button>
                                 @endif
                             </div>
                         </td>
