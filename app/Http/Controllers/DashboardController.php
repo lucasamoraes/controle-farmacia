@@ -622,6 +622,7 @@ class DashboardController extends Controller
                         'days_count' => $daysCount,
                         'average_revenue' => $daysCount > 0 ? round($aggregate['total_revenue'] / $daysCount, 2) : 0,
                         'average_total_count' => $daysCount > 0 ? round($aggregate['total_count'] / $daysCount, 1) : 0,
+                        'average_ticket' => $aggregate['average_ticket'],
                         'average_delivery_count' => $daysCount > 0 ? round($aggregate['delivery_count'] / $daysCount, 1) : 0,
                         'average_counter_count' => $daysCount > 0 ? round($aggregate['counter_count'] / $daysCount, 1) : 0,
                     ];

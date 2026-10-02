@@ -204,6 +204,7 @@ class SummaryDashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Faturamento medio por dia da semana')
             ->assertSee('Media total de tickets por dia da semana')
+            ->assertSee('Ticket medio por dia da semana')
             ->assertSee('Media de tickets delivery por dia da semana')
             ->assertSee('Media de tickets balcao por dia da semana')
             ->assertDontSee('Mesmo dia do mes');
@@ -214,6 +215,7 @@ class SummaryDashboardTest extends TestCase
         $this->assertSame(2, $september['periods']['all']['weekdays']['segunda-feira']['days_count']);
         $this->assertEquals(150.0, $september['periods']['all']['weekdays']['segunda-feira']['average_revenue']);
         $this->assertEquals(7.5, $september['periods']['all']['weekdays']['segunda-feira']['average_total_count']);
+        $this->assertEquals(20.0, $september['periods']['all']['weekdays']['segunda-feira']['average_ticket']);
         $this->assertEquals(3.0, $september['periods']['all']['weekdays']['segunda-feira']['average_delivery_count']);
         $this->assertEquals(4.5, $september['periods']['all']['weekdays']['segunda-feira']['average_counter_count']);
         $this->assertSame(1, $september['periods']['first']['days_count']);

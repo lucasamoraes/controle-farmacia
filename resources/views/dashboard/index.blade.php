@@ -465,6 +465,19 @@
         </section>
 
         <section class="card" style="margin-bottom:18px;">
+            <h2 class="panel-title">Ticket medio por dia da semana</h2>
+            <p class="subtitle" style="margin-bottom:14px;">Mostra o valor medio em reais de cada venda, agrupado por dia da semana e por mes.</p>
+            <div class="chart-box" style="height:440px;"><canvas id="weekdayMonthlyAverageTicketChart"></canvas></div>
+            <h3 style="font-size:14px; margin:18px 0 8px;">Ticket medio por dia da semana</h3>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
+                    <tbody data-daily-values-body data-metric="average_ticket" data-format="money"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card" style="margin-bottom:18px;">
             <h2 class="panel-title">Media de tickets delivery por dia da semana</h2>
             <p class="subtitle" style="margin-bottom:14px;">Compara a quantidade media de atendimentos delivery em cada dia da semana, mes a mes.</p>
             <div class="chart-box" style="height:440px;"><canvas id="weekdayMonthlyDeliveryChart"></canvas></div>
@@ -770,6 +783,7 @@
 
                 createWeekdayMonthlyChart('weekdayMonthlyRevenueChart', 'average_revenue', true);
                 createWeekdayMonthlyChart('weekdayMonthlyTotalTicketsChart', 'average_total_count', false);
+                createWeekdayMonthlyChart('weekdayMonthlyAverageTicketChart', 'average_ticket', true);
                 createWeekdayMonthlyChart('weekdayMonthlyDeliveryChart', 'average_delivery_count', false);
                 createWeekdayMonthlyChart('weekdayMonthlyCounterChart', 'average_counter_count', false);
 
