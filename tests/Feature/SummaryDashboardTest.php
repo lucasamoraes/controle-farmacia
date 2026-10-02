@@ -183,4 +183,38 @@ class SummaryDashboardTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_daily_sales_dashboard_groups_weekday_averages_by_month(): void
+    {
+        Carbon::setTestNow('2026-09-30');
+        $user = User::factory()->create();
+        $company = Company::create(['name' => 'Farmacia Teste']);
+        $company->users()->attach($user->id, ['role' => 'owner']);
+
+        foreach ([
+            ['sale_date' => '2026-09-07', 'weekday' => 'segunda-feira', 'amount' => 100, 'delivery_sales_count' => 2, 'delivery_revenue' => 40, 'counter_sales_count' => 3, 'counter_revenue' => 60],
+            ['sale_date' => '2026-09-14', 'weekday' => 'segunda-feira', 'amount' => 200, 'delivery_sales_count' => 4, 'delivery_revenue' => 80, 'counter_sales_count' => 6, 'counter_revenue' => 120],
+            ['sale_date' => '2026-08-04', 'weekday' => 'terca-feira', 'amount' => 90, 'delivery_sales_count' => 1, 'delivery_revenue' => 30, 'counter_sales_count' => 2, 'counter_revenue' => 60],
+        ] as $sale) {
+            $company->dailySales()->create($sale);
+        }
+
+        $response = $this->actingAs($user)->get('/dashboard?aba=vendas-diarias');
+        $response
+            ->assertOk()
+            ->assertSee('Faturamento medio por dia da semana')
+            ->assertSee('Media de tickets delivery por dia da semana')
+            ->assertSee('Media de tickets balcao por dia da semana')
+            ->assertDontSee('Mesmo dia do mes');
+
+        $dashboard = $response->viewData('dailySalesDashboard');
+        $september = collect($dashboard['months'])->firstWhere('label', '09/2026');
+        $this->assertNotNull($september);
+        $this->assertSame(2, $september['weekdays']['segunda-feira']['days_count']);
+        $this->assertEquals(150.0, $september['weekdays']['segunda-feira']['average_revenue']);
+        $this->assertEquals(3.0, $september['weekdays']['segunda-feira']['average_delivery_count']);
+        $this->assertEquals(4.5, $september['weekdays']['segunda-feira']['average_counter_count']);
+
+        Carbon::setTestNow();
+    }
 }

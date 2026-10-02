@@ -87,7 +87,7 @@ class DashboardController extends Controller
             'monthlyChannelTicketChart' => $this->monthlyChannelTicketChart($company),
             'ticketPeriodComparisonChart' => $this->ticketPeriodComparisonChart($company),
             'dailyTicketCountAverageChart' => $this->dailyTicketCountAverageChart($company),
-            'dailySalesDashboard' => $this->dailySalesDashboard($company, $request),
+            'dailySalesDashboard' => $this->dailySalesDashboard($company),
             'weekdayAverageChart' => $this->weekdayAverageChart($company, $dateStart, $dateEnd),
             'channelRevenueChart' => $this->channelRevenueChart($company),
             'monthlyExpenseChart' => $this->monthlyExpenseChart($company),
@@ -568,92 +568,76 @@ class DashboardController extends Controller
             ->all();
     }
 
-    private function dailySalesDashboard(Company $company, Request $request): array
+    private function dailySalesDashboard(Company $company): array
     {
         $operationalDate = $this->operationalDate($company);
         $operationalMonth = $operationalDate->copy()->startOfMonth();
         $yearStart = $operationalMonth->copy()->startOfYear();
-        $selectedDay = (int) $request->query('dia', $operationalDate->day);
-        $selectedDay = min(31, max(1, $selectedDay));
-        $weekdayOptions = $this->weekdayOptions();
-        $selectedWeekday = (string) $request->query('dia_semana', $this->weekdayKey($operationalDate->locale('pt_BR')->translatedFormat('l')));
-
-        if (! array_key_exists($selectedWeekday, $weekdayOptions)) {
-            $selectedWeekday = $this->weekdayKey($operationalDate->locale('pt_BR')->translatedFormat('l'));
-        }
+        $weekdayOptions = [
+            'segunda-feira' => 'Segunda',
+            'terca-feira' => 'Terca',
+            'quarta-feira' => 'Quarta',
+            'quinta-feira' => 'Quinta',
+            'sexta-feira' => 'Sexta',
+            'sabado' => 'Sabado',
+            'domingo' => 'Domingo',
+        ];
 
         $sales = $company->dailySales()
-            ->whereBetween('sale_date', [$yearStart->toDateString(), $operationalDate->toDateString()])
+            ->whereDate('sale_date', '>=', $yearStart->toDateString())
+            ->whereDate('sale_date', '<=', $operationalDate->toDateString())
             ->orderBy('sale_date')
             ->get();
         $monthKeys = $sales
             ->groupBy(fn ($sale) => $sale->sale_date->format('Y-m'))
             ->keys()
-            ->sort()
+            ->sortDesc()
             ->values();
-        $sameDayRows = collect();
-        $weekdayRows = collect();
-        $previousSameDayRevenue = null;
-        $previousSameDayTicket = null;
-        $previousWeekdayRevenue = null;
-        $previousWeekdayTicket = null;
+        $monthRows = collect();
 
         foreach ($monthKeys as $monthKey) {
             $month = Carbon::createFromFormat('Y-m-d', $monthKey.'-01')->startOfMonth();
+            $monthSales = $sales->filter(fn ($sale) => $sale->sale_date->format('Y-m') === $monthKey);
+            $weekdays = [];
 
-            if ($selectedDay <= $month->daysInMonth) {
-                $sameDaySales = $sales->filter(fn ($sale) => $sale->sale_date->format('Y-m') === $monthKey && (int) $sale->sale_date->format('d') === $selectedDay);
-                $sameDayRow = $this->dailySalesAggregateRow(
-                    $month->copy()->day($selectedDay)->format('d/m/Y'),
-                    $sameDaySales
-                );
-                $sameDayRow['month_label'] = $month->format('m/Y');
-                $sameDayRow['sort'] = $month->format('Y-m');
-                $sameDayRow['revenue_change'] = $this->percentChange($sameDayRow['total_revenue'], $previousSameDayRevenue);
-                $sameDayRow['ticket_change'] = $this->percentChange($sameDayRow['average_ticket'], $previousSameDayTicket);
-                $sameDayRows->push($sameDayRow);
+            foreach ($weekdayOptions as $weekdayKey => $weekdayLabel) {
+                $weekdaySales = $monthSales->filter(function ($sale) use ($weekdayKey) {
+                    $weekday = $sale->weekday ?: $sale->sale_date->locale('pt_BR')->translatedFormat('l');
 
-                if ($sameDayRow['has_sales']) {
-                    $previousSameDayRevenue = $sameDayRow['total_revenue'];
-                    $previousSameDayTicket = $sameDayRow['average_ticket'];
-                }
+                    return $this->weekdayKey($weekday) === $weekdayKey;
+                });
+                $aggregate = $this->dailySalesAggregateRow($weekdayLabel, $weekdaySales);
+                $daysCount = $aggregate['days_count'];
+                $weekdays[$weekdayKey] = [
+                    'label' => $weekdayLabel,
+                    'days_count' => $daysCount,
+                    'average_revenue' => $daysCount > 0 ? round($aggregate['total_revenue'] / $daysCount, 2) : 0,
+                    'average_delivery_count' => $daysCount > 0 ? round($aggregate['delivery_count'] / $daysCount, 1) : 0,
+                    'average_counter_count' => $daysCount > 0 ? round($aggregate['counter_count'] / $daysCount, 1) : 0,
+                ];
             }
 
-            $weekdaySales = $sales->filter(function ($sale) use ($monthKey, $selectedWeekday) {
-                $weekday = $sale->weekday ?: $sale->sale_date->locale('pt_BR')->translatedFormat('l');
-
-                return $sale->sale_date->format('Y-m') === $monthKey
-                    && $this->weekdayKey($weekday) === $selectedWeekday;
-            });
-            $weekdayRow = $this->dailySalesAggregateRow($month->format('m/Y'), $weekdaySales);
-            $weekdayRow['month_label'] = $month->format('m/Y');
-            $weekdayRow['sort'] = $month->format('Y-m');
-            $weekdayRow['average_daily_revenue'] = $weekdayRow['days_count'] > 0 ? round($weekdayRow['total_revenue'] / $weekdayRow['days_count'], 2) : 0;
-            $weekdayRow['average_daily_count'] = $weekdayRow['days_count'] > 0 ? round($weekdayRow['total_count'] / $weekdayRow['days_count'], 1) : 0;
-            $weekdayRow['revenue_change'] = $this->percentChange($weekdayRow['average_daily_revenue'], $previousWeekdayRevenue);
-            $weekdayRow['ticket_change'] = $this->percentChange($weekdayRow['average_ticket'], $previousWeekdayTicket);
-            $weekdayRows->push($weekdayRow);
-
-            if ($weekdayRow['has_sales']) {
-                $previousWeekdayRevenue = $weekdayRow['average_daily_revenue'];
-                $previousWeekdayTicket = $weekdayRow['average_ticket'];
-            }
+            $monthRows->push([
+                'label' => $month->format('m/Y'),
+                'sort' => $monthKey,
+                'days_count' => $monthSales->count(),
+                'weekdays' => $weekdays,
+            ]);
         }
 
-        $sameDayRows = $sameDayRows->sortByDesc('sort')->values();
-        $weekdayRows = $weekdayRows->sortByDesc('sort')->values();
-        $latestSameDay = $sameDayRows->firstWhere('has_sales', true);
-        $latestWeekday = $weekdayRows->firstWhere('has_sales', true);
+        $aggregate = $this->dailySalesAggregateRow('Periodo', $sales);
+        $daysCount = max(1, $aggregate['days_count']);
 
         return [
-            'selectedDay' => $selectedDay,
-            'selectedWeekday' => $selectedWeekday,
-            'selectedWeekdayLabel' => $weekdayOptions[$selectedWeekday],
             'weekdayOptions' => $weekdayOptions,
-            'sameDayRows' => $sameDayRows->all(),
-            'weekdayRows' => $weekdayRows->all(),
-            'latestSameDay' => $latestSameDay,
-            'latestWeekday' => $latestWeekday,
+            'months' => $monthRows->all(),
+            'summary' => [
+                'months_count' => $monthRows->count(),
+                'days_count' => $aggregate['days_count'],
+                'average_revenue' => round($aggregate['total_revenue'] / $daysCount, 2),
+                'average_delivery_count' => round($aggregate['delivery_count'] / $daysCount, 1),
+                'average_counter_count' => round($aggregate['counter_count'] / $daysCount, 1),
+            ],
         ];
     }
 
@@ -686,15 +670,6 @@ class DashboardController extends Controller
             'counter_ticket' => $counterCount > 0 ? round($counterRevenue / $counterCount, 2) : 0,
             'average_ticket' => $totalCount > 0 ? round($totalRevenue / $totalCount, 2) : 0,
         ];
-    }
-
-    private function percentChange(float $current, ?float $previous): ?float
-    {
-        if ($previous === null || $previous <= 0) {
-            return null;
-        }
-
-        return (($current - $previous) / $previous) * 100;
     }
 
     private function monthlyExpenseChart(Company $company): array

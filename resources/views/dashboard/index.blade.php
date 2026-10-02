@@ -14,8 +14,6 @@
     $maxSalesPeriod = max(collect($salesPeriodComparisonChart)->max('total') ?? 0, 1);
     $maxMovementType = max(collect($employeeDashboard['movementTypes'])->max('total') ?? 0, 1);
     $maxEmployeeMovement = max(collect($employeeDashboard['employeeMovementDetails'])->max('total') ?? 0, 1);
-    $latestSameDay = $dailySalesDashboard['latestSameDay'] ?? null;
-    $latestWeekday = $dailySalesDashboard['latestWeekday'] ?? null;
     $lastRevenueRow = collect($monthlyRevenueChart)->first();
     $lastChannelRow = collect($channelRevenueChart)->first();
     $deliveryTicket = (($lastChannelRow['delivery_count'] ?? 0) > 0)
@@ -33,8 +31,6 @@
         'status' => $statusFilter,
         'busca' => $search,
         'funcionario' => $employeeDashboard['selectedEmployeeId'] ?? null,
-        'dia' => $dailySalesDashboard['selectedDay'] ?? null,
-        'dia_semana' => $dailySalesDashboard['selectedWeekday'] ?? null,
     ], fn ($value) => $value !== null && $value !== '');
 @endphp
 
@@ -382,136 +378,47 @@
     @endif
 
     @if ($dashboardTab === 'vendas-diarias')
-        <form class="filter-bar" method="get" action="{{ route('dashboard') }}" style="margin-top:18px;">
-            <input type="hidden" name="aba" value="vendas-diarias">
-            <input type="hidden" name="periodo" value="{{ $period }}">
-            <div class="filter-grid" style="grid-template-columns:180px 220px auto;">
-                <label>Dia do mes
-                    <select name="dia">
-                        @for ($day = 1; $day <= 31; $day++)
-                            <option value="{{ $day }}" @selected(($dailySalesDashboard['selectedDay'] ?? 1) === $day)>Dia {{ $day }}</option>
-                        @endfor
-                    </select>
-                </label>
-                <label>Dia da semana
-                    <select name="dia_semana">
-                        @foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $key => $label)
-                            <option value="{{ $key }}" @selected(($dailySalesDashboard['selectedWeekday'] ?? '') === $key)>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                </label>
-                <div class="filter-actions">
-                    <button class="btn secondary" type="submit">Analisar</button>
-                </div>
-            </div>
-        </form>
-
-        <div class="grid stats">
-            <div class="card"><div class="metric-label">Dia analisado</div><div class="metric-value">Dia {{ $dailySalesDashboard['selectedDay'] }}</div></div>
-            <div class="card"><div class="metric-label">Faturamento do ultimo dia</div><div class="metric-value">{{ $fmtMoney($latestSameDay['total_revenue'] ?? 0) }}</div><p class="subtitle" style="margin-top:6px;">{{ $latestSameDay['label'] ?? 'Sem venda cadastrada' }}</p></div>
-            <div class="card"><div class="metric-label">Variacao vs mes anterior</div><div class="metric-value" style="color:{{ (($latestSameDay['revenue_change'] ?? 0) >= 0) ? 'var(--brand)' : 'var(--danger)' }};">{{ $fmtPercent($latestSameDay['revenue_change'] ?? null) }}</div><p class="subtitle" style="margin-top:6px;">Valor vendido no mesmo dia</p></div>
-            <div class="card"><div class="metric-label">Ticket medio do dia</div><div class="metric-value">{{ $fmtMoney($latestSameDay['average_ticket'] ?? 0) }}</div><p class="subtitle" style="margin-top:6px;">{{ $fmtPercent($latestSameDay['ticket_change'] ?? null) }} vs anterior</p></div>
-        </div>
-
-        <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-bottom:18px;">
-            <section class="card">
-                <h2 class="panel-title">Mesmo dia do mes</h2>
-                <p class="subtitle" style="margin-bottom:14px;">Compara o dia {{ $dailySalesDashboard['selectedDay'] }} nos meses cadastrados, separando delivery e balcao.</p>
-                <div class="chart-box"><canvas id="sameDayRevenueChart"></canvas></div>
-            </section>
-            <section class="card">
-                <h2 class="panel-title">Quantidade e ticket do dia</h2>
-                <p class="subtitle" style="margin-bottom:14px;">Mostra volume de vendas e ticket medio no mesmo dia de cada mes.</p>
-                <div class="chart-box"><canvas id="sameDayQuantityChart"></canvas></div>
-            </section>
+        <div class="grid stats" style="margin-top:18px;">
+            <div class="card"><div class="metric-label">Meses analisados</div><div class="metric-value">{{ $dailySalesDashboard['summary']['months_count'] ?? 0 }}</div></div>
+            <div class="card"><div class="metric-label">Dias faturados</div><div class="metric-value">{{ number_format($dailySalesDashboard['summary']['days_count'] ?? 0, 0, ',', '.') }}</div></div>
+            <div class="card"><div class="metric-label">Faturamento medio por dia</div><div class="metric-value">{{ $fmtMoney($dailySalesDashboard['summary']['average_revenue'] ?? 0) }}</div></div>
+            <div class="card"><div class="metric-label">Tickets medios por dia</div><div class="metric-value">{{ number_format(($dailySalesDashboard['summary']['average_delivery_count'] ?? 0) + ($dailySalesDashboard['summary']['average_counter_count'] ?? 0), 1, ',', '.') }}</div><p class="subtitle" style="margin-top:6px;">Delivery {{ number_format($dailySalesDashboard['summary']['average_delivery_count'] ?? 0, 1, ',', '.') }} | Balcao {{ number_format($dailySalesDashboard['summary']['average_counter_count'] ?? 0, 1, ',', '.') }}</p></div>
         </div>
 
         <section class="card" style="margin-bottom:18px;">
-            <h2 class="panel-title">Resumo do mesmo dia por mes</h2>
+            <h2 class="panel-title">Faturamento medio por dia da semana</h2>
+            <p class="subtitle" style="margin-bottom:14px;">Cada grupo representa um mes; as barras mostram quanto cada dia da semana faturou em media.</p>
+            <div class="chart-box" style="height:440px;"><canvas id="weekdayMonthlyRevenueChart"></canvas></div>
+            <h3 style="font-size:14px; margin:18px 0 8px;">Dias faturados usados na media</h3>
             <div class="table-wrap">
                 <table>
-                    <thead>
-                        <tr>
-                            <th>Data</th>
-                            <th>Delivery</th>
-                            <th>Balcao</th>
-                            <th>Total</th>
-                            <th>Ticket medio</th>
-                            <th>Var. faturamento</th>
-                            <th>Var. ticket</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
                     <tbody>
-                        @forelse (($dailySalesDashboard['sameDayRows'] ?? []) as $row)
+                        @forelse (($dailySalesDashboard['months'] ?? []) as $month)
                             <tr>
-                                <td>{{ $row['label'] }}</td>
-                                <td>{{ number_format($row['delivery_count'], 0, ',', '.') }} venda(s)<br><strong>{{ $fmtMoney($row['delivery_revenue']) }}</strong><br><small>{{ $fmtMoney($row['delivery_ticket']) }} ticket</small></td>
-                                <td>{{ number_format($row['counter_count'], 0, ',', '.') }} venda(s)<br><strong>{{ $fmtMoney($row['counter_revenue']) }}</strong><br><small>{{ $fmtMoney($row['counter_ticket']) }} ticket</small></td>
-                                <td><strong>{{ $fmtMoney($row['total_revenue']) }}</strong><br><small>{{ number_format($row['total_count'], 0, ',', '.') }} venda(s)</small></td>
-                                <td>{{ $fmtMoney($row['average_ticket']) }}</td>
-                                <td style="color:{{ (($row['revenue_change'] ?? 0) >= 0) ? 'var(--brand)' : 'var(--danger)' }};">{{ $fmtPercent($row['revenue_change']) }}</td>
-                                <td style="color:{{ (($row['ticket_change'] ?? 0) >= 0) ? 'var(--brand)' : 'var(--danger)' }};">{{ $fmtPercent($row['ticket_change']) }}</td>
+                                <td><strong>{{ $month['label'] }}</strong></td>
+                                @foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $key => $label)
+                                    <td>{{ $month['weekdays'][$key]['days_count'] ?? 0 }} dia(s)</td>
+                                @endforeach
                             </tr>
                         @empty
-                            <tr><td colspan="7">Nenhuma venda diaria cadastrada para comparar.</td></tr>
+                            <tr><td colspan="8">Nenhuma venda diaria cadastrada.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
         </section>
 
-        <div class="grid stats">
-            <div class="card"><div class="metric-label">Dia da semana</div><div class="metric-value">{{ $dailySalesDashboard['selectedWeekdayLabel'] }}</div></div>
-            <div class="card"><div class="metric-label">Media diaria recente</div><div class="metric-value">{{ $fmtMoney($latestWeekday['average_daily_revenue'] ?? 0) }}</div><p class="subtitle" style="margin-top:6px;">{{ $latestWeekday['label'] ?? 'Sem venda cadastrada' }}</p></div>
-            <div class="card"><div class="metric-label">Variacao media diaria</div><div class="metric-value" style="color:{{ (($latestWeekday['revenue_change'] ?? 0) >= 0) ? 'var(--brand)' : 'var(--danger)' }};">{{ $fmtPercent($latestWeekday['revenue_change'] ?? null) }}</div></div>
-            <div class="card"><div class="metric-label">Ticket medio</div><div class="metric-value">{{ $fmtMoney($latestWeekday['average_ticket'] ?? 0) }}</div><p class="subtitle" style="margin-top:6px;">{{ number_format($latestWeekday['average_daily_count'] ?? 0, 1, ',', '.') }} venda(s)/dia</p></div>
-        </div>
-
-        <div class="grid" style="grid-template-columns:1fr 1fr; align-items:start; margin-bottom:18px;">
-            <section class="card">
-                <h2 class="panel-title">Faturamento por dia da semana</h2>
-                <p class="subtitle" style="margin-bottom:14px;">Compara a media diaria de {{ strtolower($dailySalesDashboard['selectedWeekdayLabel']) }} em cada mes.</p>
-                <div class="chart-box"><canvas id="weekdayRevenueTrendChart"></canvas></div>
-            </section>
-            <section class="card">
-                <h2 class="panel-title">Tickets por dia da semana</h2>
-                <p class="subtitle" style="margin-bottom:14px;">Acompanha quantidade media e ticket medio por canal.</p>
-                <div class="chart-box"><canvas id="weekdayTicketTrendChart"></canvas></div>
-            </section>
-        </div>
+        <section class="card" style="margin-bottom:18px;">
+            <h2 class="panel-title">Media de tickets delivery por dia da semana</h2>
+            <p class="subtitle" style="margin-bottom:14px;">Compara a quantidade media de atendimentos delivery em cada dia da semana, mes a mes.</p>
+            <div class="chart-box" style="height:440px;"><canvas id="weekdayMonthlyDeliveryChart"></canvas></div>
+        </section>
 
         <section class="card">
-            <h2 class="panel-title">Resumo por {{ strtolower($dailySalesDashboard['selectedWeekdayLabel']) }}</h2>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Mes</th>
-                            <th>Dias encontrados</th>
-                            <th>Media diaria</th>
-                            <th>Delivery</th>
-                            <th>Balcao</th>
-                            <th>Ticket medio</th>
-                            <th>Var. media</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse (($dailySalesDashboard['weekdayRows'] ?? []) as $row)
-                            <tr>
-                                <td>{{ $row['label'] }}</td>
-                                <td>{{ $row['days_count'] }}</td>
-                                <td><strong>{{ $fmtMoney($row['average_daily_revenue']) }}</strong><br><small>{{ number_format($row['average_daily_count'], 1, ',', '.') }} venda(s)/dia</small></td>
-                                <td>{{ number_format($row['delivery_count'], 0, ',', '.') }} venda(s)<br><strong>{{ $fmtMoney($row['delivery_revenue']) }}</strong></td>
-                                <td>{{ number_format($row['counter_count'], 0, ',', '.') }} venda(s)<br><strong>{{ $fmtMoney($row['counter_revenue']) }}</strong></td>
-                                <td>{{ $fmtMoney($row['average_ticket']) }}</td>
-                                <td style="color:{{ (($row['revenue_change'] ?? 0) >= 0) ? 'var(--brand)' : 'var(--danger)' }};">{{ $fmtPercent($row['revenue_change']) }}</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="7">Nenhuma venda encontrada para este dia da semana.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
+            <h2 class="panel-title">Media de tickets balcao por dia da semana</h2>
+            <p class="subtitle" style="margin-bottom:14px;">Compara a quantidade media de atendimentos no balcao em cada dia da semana, mes a mes.</p>
+            <div class="chart-box" style="height:440px;"><canvas id="weekdayMonthlyCounterChart"></canvas></div>
         </section>
     @endif
 
@@ -607,8 +514,8 @@
                 const expenses = @json($monthlyExpenseChart);
                 const categories = @json($categoryTotals->values());
                 const employeeMovements = @json($employeeDashboard['employeeMovementDetails']);
-                const sameDayRows = dailySalesDashboard.sameDayRows || [];
-                const weekdayRows = dailySalesDashboard.weekdayRows || [];
+                const dailySalesMonths = dailySalesDashboard.months || [];
+                const dailySalesWeekdays = Object.entries(dailySalesDashboard.weekdayOptions || {});
                 const dailyCountOptions = {
                     ...commonOptions,
                     plugins: {
@@ -714,78 +621,52 @@
                     options: dailyCountOptions
                 });
 
-                const sameDayRevenueCanvas = document.getElementById('sameDayRevenueChart');
-                if (sameDayRevenueCanvas) new Chart(sameDayRevenueCanvas, {
-                    type: 'bar',
-                    data: {
-                        labels: sameDayRows.map((row) => row.month_label),
-                        datasets: [
-                            { label: 'Delivery', data: sameDayRows.map((row) => row.delivery_revenue), backgroundColor: '#2563eb', borderRadius: 4 },
-                            { label: 'Balcao', data: sameDayRows.map((row) => row.counter_revenue), backgroundColor: '#0f766e', borderRadius: 4 },
-                            { type: 'line', label: 'Ticket medio', data: sameDayRows.map((row) => row.average_ticket), borderColor: '#b7791f', backgroundColor: '#b7791f', tension: .3, yAxisID: 'ticket' }
-                        ]
-                    },
-                    options: {
-                        ...commonOptions,
-                        scales: {
-                            y: { beginAtZero: true, ticks: { callback: money } },
-                            ticket: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: money } }
-                        }
-                    }
-                });
+                const weekdayColors = ['#2563eb', '#0f766e', '#b7791f', '#7c3aed', '#dc2626', '#0891b2', '#475569'];
+                const createWeekdayMonthlyChart = (canvasId, metric, currency) => {
+                    const canvas = document.getElementById(canvasId);
+                    if (!canvas) return;
 
-                const sameDayQuantityCanvas = document.getElementById('sameDayQuantityChart');
-                if (sameDayQuantityCanvas) new Chart(sameDayQuantityCanvas, {
-                    type: 'bar',
-                    data: {
-                        labels: sameDayRows.map((row) => row.month_label),
-                        datasets: [
-                            { label: 'Qtd delivery', data: sameDayRows.map((row) => row.delivery_count), backgroundColor: '#2563eb', borderRadius: 4 },
-                            { label: 'Qtd balcao', data: sameDayRows.map((row) => row.counter_count), backgroundColor: '#0f766e', borderRadius: 4 },
-                            { type: 'line', label: 'Ticket medio', data: sameDayRows.map((row) => row.average_ticket), borderColor: '#b7791f', backgroundColor: '#b7791f', tension: .3, yAxisID: 'ticket' }
-                        ]
-                    },
-                    options: {
-                        ...dailyCountOptions,
-                        scales: {
-                            y: { beginAtZero: true },
-                            ticket: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: money } }
+                    new Chart(canvas, {
+                        type: 'bar',
+                        data: {
+                            labels: dailySalesMonths.map((month) => month.label),
+                            datasets: dailySalesWeekdays.map(([weekdayKey, weekdayLabel], index) => ({
+                                label: weekdayLabel,
+                                weekdayKey,
+                                data: dailySalesMonths.map((month) => month.weekdays?.[weekdayKey]?.[metric] || 0),
+                                backgroundColor: weekdayColors[index],
+                                borderRadius: 4,
+                                maxBarThickness: 34
+                            }))
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: { mode: 'index', intersect: false },
+                            plugins: {
+                                legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Arial' } } },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (ctx) => `${ctx.dataset.label}: ${currency ? money(ctx.parsed.y) : plainNumber(ctx.parsed.y)}`,
+                                        afterLabel: (ctx) => {
+                                            const month = dailySalesMonths[ctx.dataIndex];
+                                            const days = month?.weekdays?.[ctx.dataset.weekdayKey]?.days_count || 0;
+                                            return `${days} dia(s) faturado(s)`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: { stacked: false, ticks: { maxRotation: 0 } },
+                                y: { beginAtZero: true, ticks: { callback: currency ? money : plainNumber } }
+                            }
                         }
-                    }
-                });
+                    });
+                };
 
-                const weekdayRevenueTrendCanvas = document.getElementById('weekdayRevenueTrendChart');
-                if (weekdayRevenueTrendCanvas) new Chart(weekdayRevenueTrendCanvas, {
-                    type: 'bar',
-                    data: {
-                        labels: weekdayRows.map((row) => row.month_label),
-                        datasets: [
-                            { label: 'Media diaria', data: weekdayRows.map((row) => row.average_daily_revenue), backgroundColor: '#2563eb', borderRadius: 4 },
-                            { type: 'line', label: 'Ticket medio', data: weekdayRows.map((row) => row.average_ticket), borderColor: '#b7791f', backgroundColor: '#b7791f', tension: .3 }
-                        ]
-                    },
-                    options: commonOptions
-                });
-
-                const weekdayTicketTrendCanvas = document.getElementById('weekdayTicketTrendChart');
-                if (weekdayTicketTrendCanvas) new Chart(weekdayTicketTrendCanvas, {
-                    type: 'bar',
-                    data: {
-                        labels: weekdayRows.map((row) => row.month_label),
-                        datasets: [
-                            { label: 'Tickets/dia delivery', data: weekdayRows.map((row) => row.days_count > 0 ? row.delivery_count / row.days_count : 0), backgroundColor: '#2563eb', borderRadius: 4 },
-                            { label: 'Tickets/dia balcao', data: weekdayRows.map((row) => row.days_count > 0 ? row.counter_count / row.days_count : 0), backgroundColor: '#0f766e', borderRadius: 4 },
-                            { type: 'line', label: 'Ticket medio', data: weekdayRows.map((row) => row.average_ticket), borderColor: '#b7791f', backgroundColor: '#b7791f', tension: .3, yAxisID: 'ticket' }
-                        ]
-                    },
-                    options: {
-                        ...dailyCountOptions,
-                        scales: {
-                            y: { beginAtZero: true },
-                            ticket: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: money } }
-                        }
-                    }
-                });
+                createWeekdayMonthlyChart('weekdayMonthlyRevenueChart', 'average_revenue', true);
+                createWeekdayMonthlyChart('weekdayMonthlyDeliveryChart', 'average_delivery_count', false);
+                createWeekdayMonthlyChart('weekdayMonthlyCounterChart', 'average_counter_count', false);
 
                 const ticketPeriodLabels = ticketPeriods.map((row) => row.is_current ? `${row.label} ate dia ${row.last_day_recorded}` : row.label);
                 const deliveryTicketPeriodCanvas = document.getElementById('deliveryTicketPeriodChart');
