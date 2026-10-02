@@ -210,10 +210,12 @@ class SummaryDashboardTest extends TestCase
         $dashboard = $response->viewData('dailySalesDashboard');
         $september = collect($dashboard['months'])->firstWhere('label', '09/2026');
         $this->assertNotNull($september);
-        $this->assertSame(2, $september['weekdays']['segunda-feira']['days_count']);
-        $this->assertEquals(150.0, $september['weekdays']['segunda-feira']['average_revenue']);
-        $this->assertEquals(3.0, $september['weekdays']['segunda-feira']['average_delivery_count']);
-        $this->assertEquals(4.5, $september['weekdays']['segunda-feira']['average_counter_count']);
+        $this->assertSame(2, $september['periods']['all']['weekdays']['segunda-feira']['days_count']);
+        $this->assertEquals(150.0, $september['periods']['all']['weekdays']['segunda-feira']['average_revenue']);
+        $this->assertEquals(3.0, $september['periods']['all']['weekdays']['segunda-feira']['average_delivery_count']);
+        $this->assertEquals(4.5, $september['periods']['all']['weekdays']['segunda-feira']['average_counter_count']);
+        $this->assertSame(1, $september['periods']['first']['days_count']);
+        $this->assertSame(1, $september['periods']['second']['days_count']);
 
         Carbon::setTestNow();
     }

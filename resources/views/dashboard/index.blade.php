@@ -76,6 +76,7 @@
         <a class="quick-filter {{ $dashboardTab === 'vendas-diarias' ? 'active' : '' }}" href="{{ route('dashboard', array_merge($tabFilters, ['aba' => 'vendas-diarias'])) }}">Vendas diarias</a>
     </div>
 
+    @if ($dashboardTab !== 'vendas-diarias')
     <form class="filter-bar" method="get" action="{{ route('dashboard') }}">
         <input type="hidden" name="aba" value="{{ $dashboardTab }}">
         <div class="filter-grid" style="grid-template-columns:180px 170px 170px 170px auto;">
@@ -122,6 +123,7 @@
             </div>
         </div>
     </form>
+    @endif
 
     @if ($dashboardTab === 'financeiro')
         <div class="grid stats">
@@ -378,11 +380,44 @@
     @endif
 
     @if ($dashboardTab === 'vendas-diarias')
+        <section class="card" style="margin-top:18px;" data-daily-sales-filters>
+            <div class="filter-grid" style="grid-template-columns:minmax(0, 1.5fr) minmax(300px, 1fr) auto; gap:18px; align-items:end;">
+                <fieldset style="min-width:0; margin:0; padding:0; border:0;">
+                    <legend style="font-weight:700; color:#344054; margin-bottom:8px;">Meses</legend>
+                    <div class="quick-filters" data-daily-months>
+                        @foreach (($dailySalesDashboard['months'] ?? []) as $month)
+                            <label class="quick-filter active" style="display:inline-flex; cursor:pointer;">
+                                <input type="checkbox" value="{{ $month['sort'] }}" checked style="width:auto; min-height:0; margin:0;">
+                                {{ $month['label'] }}@if($month['is_current']) <small>(atual)</small>@endif
+                            </label>
+                        @endforeach
+                    </div>
+                    <div class="actions" style="margin-top:8px;">
+                        <button class="btn small secondary" type="button" data-daily-month-action="all">Selecionar todos</button>
+                        <button class="btn small secondary" type="button" data-daily-month-action="none">Limpar meses</button>
+                    </div>
+                </fieldset>
+
+                <fieldset style="min-width:0; margin:0; padding:0; border:0;">
+                    <legend style="font-weight:700; color:#344054; margin-bottom:8px;">Periodo dentro do mes</legend>
+                    <div class="quick-filters" data-daily-periods>
+                        <button class="quick-filter active" type="button" data-daily-period="all">Mes inteiro</button>
+                        <button class="quick-filter" type="button" data-daily-period="first">Dias 1-10</button>
+                        <button class="quick-filter" type="button" data-daily-period="second">Dias 11-20</button>
+                        <button class="quick-filter" type="button" data-daily-period="third">Dias 21-fechamento</button>
+                    </div>
+                </fieldset>
+
+                <button class="btn secondary" type="button" data-daily-reset>Limpar filtros</button>
+            </div>
+            <p class="subtitle" style="margin-top:12px;" data-daily-filter-summary>Todos os meses | Mes inteiro | Todos os dias da semana</p>
+        </section>
+
         <div class="grid stats" style="margin-top:18px;">
-            <div class="card"><div class="metric-label">Meses analisados</div><div class="metric-value">{{ $dailySalesDashboard['summary']['months_count'] ?? 0 }}</div></div>
-            <div class="card"><div class="metric-label">Dias faturados</div><div class="metric-value">{{ number_format($dailySalesDashboard['summary']['days_count'] ?? 0, 0, ',', '.') }}</div></div>
-            <div class="card"><div class="metric-label">Faturamento medio por dia</div><div class="metric-value">{{ $fmtMoney($dailySalesDashboard['summary']['average_revenue'] ?? 0) }}</div></div>
-            <div class="card"><div class="metric-label">Tickets medios por dia</div><div class="metric-value">{{ number_format(($dailySalesDashboard['summary']['average_delivery_count'] ?? 0) + ($dailySalesDashboard['summary']['average_counter_count'] ?? 0), 1, ',', '.') }}</div><p class="subtitle" style="margin-top:6px;">Delivery {{ number_format($dailySalesDashboard['summary']['average_delivery_count'] ?? 0, 1, ',', '.') }} | Balcao {{ number_format($dailySalesDashboard['summary']['average_counter_count'] ?? 0, 1, ',', '.') }}</p></div>
+            <div class="card"><div class="metric-label">Meses analisados</div><div class="metric-value" data-daily-summary="months">{{ $dailySalesDashboard['summary']['months_count'] ?? 0 }}</div></div>
+            <div class="card"><div class="metric-label">Dias faturados</div><div class="metric-value" data-daily-summary="days">{{ number_format($dailySalesDashboard['summary']['days_count'] ?? 0, 0, ',', '.') }}</div></div>
+            <div class="card"><div class="metric-label">Faturamento medio por dia</div><div class="metric-value" data-daily-summary="revenue">{{ $fmtMoney($dailySalesDashboard['summary']['average_revenue'] ?? 0) }}</div></div>
+            <div class="card"><div class="metric-label">Tickets medios por dia</div><div class="metric-value" data-daily-summary="tickets">{{ number_format(($dailySalesDashboard['summary']['average_delivery_count'] ?? 0) + ($dailySalesDashboard['summary']['average_counter_count'] ?? 0), 1, ',', '.') }}</div><p class="subtitle" style="margin-top:6px;" data-daily-summary="channels">Delivery {{ number_format($dailySalesDashboard['summary']['average_delivery_count'] ?? 0, 1, ',', '.') }} | Balcao {{ number_format($dailySalesDashboard['summary']['average_counter_count'] ?? 0, 1, ',', '.') }}</p></div>
         </div>
 
         <section class="card" style="margin-bottom:18px;">
@@ -393,12 +428,12 @@
             <div class="table-wrap">
                 <table>
                     <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
-                    <tbody>
+                    <tbody data-daily-days-body>
                         @forelse (($dailySalesDashboard['months'] ?? []) as $month)
                             <tr>
                                 <td><strong>{{ $month['label'] }}</strong></td>
                                 @foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $key => $label)
-                                    <td>{{ $month['weekdays'][$key]['days_count'] ?? 0 }} dia(s)</td>
+                                    <td>{{ $month['periods']['all']['weekdays'][$key]['days_count'] ?? 0 }} dia(s)</td>
                                 @endforeach
                             </tr>
                         @empty
@@ -514,7 +549,7 @@
                 const expenses = @json($monthlyExpenseChart);
                 const categories = @json($categoryTotals->values());
                 const employeeMovements = @json($employeeDashboard['employeeMovementDetails']);
-                const dailySalesMonths = dailySalesDashboard.months || [];
+                const allDailySalesMonths = dailySalesDashboard.months || [];
                 const dailySalesWeekdays = Object.entries(dailySalesDashboard.weekdayOptions || {});
                 const dailyCountOptions = {
                     ...commonOptions,
@@ -622,18 +657,38 @@
                 });
 
                 const weekdayColors = ['#2563eb', '#0f766e', '#b7791f', '#7c3aed', '#dc2626', '#0891b2', '#475569'];
+                const weekdayCharts = [];
+                const selectedDailyMonths = new Set(allDailySalesMonths.map((month) => month.sort));
+                const dailyPeriodLabels = { all: 'Mes inteiro', first: 'Dias 1-10', second: 'Dias 11-20', third: 'Dias 21-fechamento' };
+                let activeDailyPeriod = 'all';
+                let selectedDailyWeekday = null;
+                let visibleDailySalesMonths = [...allDailySalesMonths];
+                const fadedColor = (hex) => {
+                    const value = hex.replace('#', '');
+                    const red = parseInt(value.substring(0, 2), 16);
+                    const green = parseInt(value.substring(2, 4), 16);
+                    const blue = parseInt(value.substring(4, 6), 16);
+                    return `rgba(${red}, ${green}, ${blue}, .16)`;
+                };
+                const selectedMonthRows = () => allDailySalesMonths.filter((month) => selectedDailyMonths.has(month.sort));
+                const selectedPeriodRow = (month) => month.periods?.[activeDailyPeriod] || { days_count: 0, total_revenue: 0, delivery_count: 0, counter_count: 0, weekdays: {} };
+                const setDailyWeekday = (weekdayKey) => {
+                    selectedDailyWeekday = selectedDailyWeekday === weekdayKey ? null : weekdayKey;
+                    refreshDailySalesDashboard();
+                };
                 const createWeekdayMonthlyChart = (canvasId, metric, currency) => {
                     const canvas = document.getElementById(canvasId);
                     if (!canvas) return;
 
-                    new Chart(canvas, {
+                    const chart = new Chart(canvas, {
                         type: 'bar',
                         data: {
-                            labels: dailySalesMonths.map((month) => month.label),
+                            labels: [],
                             datasets: dailySalesWeekdays.map(([weekdayKey, weekdayLabel], index) => ({
                                 label: weekdayLabel,
                                 weekdayKey,
-                                data: dailySalesMonths.map((month) => month.weekdays?.[weekdayKey]?.[metric] || 0),
+                                baseColor: weekdayColors[index],
+                                data: [],
                                 backgroundColor: weekdayColors[index],
                                 borderRadius: 4,
                                 maxBarThickness: 34
@@ -642,15 +697,28 @@
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
-                            interaction: { mode: 'index', intersect: false },
+                            interaction: { mode: 'nearest', intersect: true },
+                            onClick: (_, elements, currentChart) => {
+                                if (!elements.length) return;
+                                setDailyWeekday(currentChart.data.datasets[elements[0].datasetIndex].weekdayKey);
+                            },
+                            onHover: (event, elements) => {
+                                event.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+                            },
                             plugins: {
-                                legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Arial' } } },
+                                legend: {
+                                    position: 'top',
+                                    labels: { boxWidth: 10, font: { family: 'Arial' } },
+                                    onClick: (_, legendItem, legend) => setDailyWeekday(legend.chart.data.datasets[legendItem.datasetIndex].weekdayKey)
+                                },
                                 tooltip: {
+                                    mode: 'nearest',
+                                    intersect: true,
                                     callbacks: {
                                         label: (ctx) => `${ctx.dataset.label}: ${currency ? money(ctx.parsed.y) : plainNumber(ctx.parsed.y)}`,
                                         afterLabel: (ctx) => {
-                                            const month = dailySalesMonths[ctx.dataIndex];
-                                            const days = month?.weekdays?.[ctx.dataset.weekdayKey]?.days_count || 0;
+                                            const month = visibleDailySalesMonths[ctx.dataIndex];
+                                            const days = selectedPeriodRow(month)?.weekdays?.[ctx.dataset.weekdayKey]?.days_count || 0;
                                             return `${days} dia(s) faturado(s)`;
                                         }
                                     }
@@ -662,11 +730,137 @@
                             }
                         }
                     });
+                    chart.dailyMetric = metric;
+                    weekdayCharts.push(chart);
                 };
 
                 createWeekdayMonthlyChart('weekdayMonthlyRevenueChart', 'average_revenue', true);
                 createWeekdayMonthlyChart('weekdayMonthlyDeliveryChart', 'average_delivery_count', false);
                 createWeekdayMonthlyChart('weekdayMonthlyCounterChart', 'average_counter_count', false);
+
+                const refreshDailySalesDashboard = () => {
+                    visibleDailySalesMonths = selectedMonthRows();
+                    weekdayCharts.forEach((chart) => {
+                        chart.data.labels = visibleDailySalesMonths.map((month) => month.label);
+                        chart.data.datasets.forEach((dataset) => {
+                            dataset.data = visibleDailySalesMonths.map((month) => selectedPeriodRow(month).weekdays?.[dataset.weekdayKey]?.[chart.dailyMetric] || 0);
+                            dataset.backgroundColor = selectedDailyWeekday && selectedDailyWeekday !== dataset.weekdayKey
+                                ? fadedColor(dataset.baseColor)
+                                : dataset.baseColor;
+                            dataset.borderColor = dataset.baseColor;
+                            dataset.borderWidth = selectedDailyWeekday === dataset.weekdayKey ? 2 : 0;
+                        });
+                        chart.update();
+                    });
+
+                    let totalDays = 0;
+                    let totalRevenue = 0;
+                    let deliveryCount = 0;
+                    let counterCount = 0;
+                    visibleDailySalesMonths.forEach((month) => {
+                        const period = selectedPeriodRow(month);
+                        if (selectedDailyWeekday) {
+                            const weekday = period.weekdays?.[selectedDailyWeekday] || {};
+                            const days = Number(weekday.days_count || 0);
+                            totalDays += days;
+                            totalRevenue += Number(weekday.average_revenue || 0) * days;
+                            deliveryCount += Number(weekday.average_delivery_count || 0) * days;
+                            counterCount += Number(weekday.average_counter_count || 0) * days;
+                        } else {
+                            totalDays += Number(period.days_count || 0);
+                            totalRevenue += Number(period.total_revenue || 0);
+                            deliveryCount += Number(period.delivery_count || 0);
+                            counterCount += Number(period.counter_count || 0);
+                        }
+                    });
+                    const divisor = Math.max(1, totalDays);
+                    const averageDelivery = deliveryCount / divisor;
+                    const averageCounter = counterCount / divisor;
+                    document.querySelector('[data-daily-summary="months"]')?.replaceChildren(document.createTextNode(String(visibleDailySalesMonths.length)));
+                    document.querySelector('[data-daily-summary="days"]')?.replaceChildren(document.createTextNode(plainNumber(totalDays)));
+                    document.querySelector('[data-daily-summary="revenue"]')?.replaceChildren(document.createTextNode(money(totalRevenue / divisor)));
+                    document.querySelector('[data-daily-summary="tickets"]')?.replaceChildren(document.createTextNode(plainNumber(averageDelivery + averageCounter)));
+                    document.querySelector('[data-daily-summary="channels"]')?.replaceChildren(document.createTextNode(`Delivery ${plainNumber(averageDelivery)} | Balcao ${plainNumber(averageCounter)}`));
+
+                    const daysBody = document.querySelector('[data-daily-days-body]');
+                    if (daysBody) {
+                        daysBody.replaceChildren();
+                        if (!visibleDailySalesMonths.length) {
+                            const row = document.createElement('tr');
+                            const cell = document.createElement('td');
+                            cell.colSpan = 8;
+                            cell.textContent = 'Selecione pelo menos um mes para visualizar os dados.';
+                            row.appendChild(cell);
+                            daysBody.appendChild(row);
+                        }
+                        visibleDailySalesMonths.forEach((month) => {
+                            const row = document.createElement('tr');
+                            const monthCell = document.createElement('td');
+                            const strong = document.createElement('strong');
+                            strong.textContent = month.label;
+                            monthCell.appendChild(strong);
+                            row.appendChild(monthCell);
+                            dailySalesWeekdays.forEach(([weekdayKey]) => {
+                                const cell = document.createElement('td');
+                                cell.textContent = `${selectedPeriodRow(month).weekdays?.[weekdayKey]?.days_count || 0} dia(s)`;
+                                if (selectedDailyWeekday) {
+                                    cell.style.opacity = selectedDailyWeekday === weekdayKey ? '1' : '.3';
+                                    if (selectedDailyWeekday === weekdayKey) cell.style.fontWeight = '800';
+                                }
+                                row.appendChild(cell);
+                            });
+                            daysBody.appendChild(row);
+                        });
+                    }
+
+                    const weekdayLabel = dailySalesWeekdays.find(([key]) => key === selectedDailyWeekday)?.[1];
+                    const monthText = visibleDailySalesMonths.length === allDailySalesMonths.length
+                        ? 'Todos os meses'
+                        : `${visibleDailySalesMonths.length} mes(es) selecionado(s)`;
+                    const summary = document.querySelector('[data-daily-filter-summary]');
+                    if (summary) summary.textContent = `${monthText} | ${dailyPeriodLabels[activeDailyPeriod]} | ${weekdayLabel || 'Todos os dias da semana'}`;
+                };
+
+                document.querySelectorAll('[data-daily-months] input[type="checkbox"]').forEach((input) => {
+                    input.addEventListener('change', () => {
+                        if (input.checked) selectedDailyMonths.add(input.value);
+                        else selectedDailyMonths.delete(input.value);
+                        input.closest('label')?.classList.toggle('active', input.checked);
+                        refreshDailySalesDashboard();
+                    });
+                });
+                document.querySelectorAll('[data-daily-month-action]').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const selectAll = button.dataset.dailyMonthAction === 'all';
+                        selectedDailyMonths.clear();
+                        document.querySelectorAll('[data-daily-months] input[type="checkbox"]').forEach((input) => {
+                            input.checked = selectAll;
+                            input.closest('label')?.classList.toggle('active', selectAll);
+                            if (selectAll) selectedDailyMonths.add(input.value);
+                        });
+                        refreshDailySalesDashboard();
+                    });
+                });
+                document.querySelectorAll('[data-daily-period]').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        activeDailyPeriod = button.dataset.dailyPeriod;
+                        document.querySelectorAll('[data-daily-period]').forEach((item) => item.classList.toggle('active', item === button));
+                        refreshDailySalesDashboard();
+                    });
+                });
+                document.querySelector('[data-daily-reset]')?.addEventListener('click', () => {
+                    activeDailyPeriod = 'all';
+                    selectedDailyWeekday = null;
+                    selectedDailyMonths.clear();
+                    allDailySalesMonths.forEach((month) => selectedDailyMonths.add(month.sort));
+                    document.querySelectorAll('[data-daily-months] input[type="checkbox"]').forEach((input) => {
+                        input.checked = true;
+                        input.closest('label')?.classList.add('active');
+                    });
+                    document.querySelectorAll('[data-daily-period]').forEach((button) => button.classList.toggle('active', button.dataset.dailyPeriod === 'all'));
+                    refreshDailySalesDashboard();
+                });
+                refreshDailySalesDashboard();
 
                 const ticketPeriodLabels = ticketPeriods.map((row) => row.is_current ? `${row.label} ate dia ${row.last_day_recorded}` : row.label);
                 const deliveryTicketPeriodCanvas = document.getElementById('deliveryTicketPeriodChart');

@@ -598,22 +598,41 @@ class DashboardController extends Controller
         foreach ($monthKeys as $monthKey) {
             $month = Carbon::createFromFormat('Y-m-d', $monthKey.'-01')->startOfMonth();
             $monthSales = $sales->filter(fn ($sale) => $sale->sale_date->format('Y-m') === $monthKey);
-            $weekdays = [];
+            $periodRows = [
+                'all' => $monthSales,
+                'first' => $monthSales->filter(fn ($sale) => $sale->sale_date->day <= 10),
+                'second' => $monthSales->filter(fn ($sale) => $sale->sale_date->day >= 11 && $sale->sale_date->day <= 20),
+                'third' => $monthSales->filter(fn ($sale) => $sale->sale_date->day >= 21),
+            ];
+            $periods = [];
 
-            foreach ($weekdayOptions as $weekdayKey => $weekdayLabel) {
-                $weekdaySales = $monthSales->filter(function ($sale) use ($weekdayKey) {
-                    $weekday = $sale->weekday ?: $sale->sale_date->locale('pt_BR')->translatedFormat('l');
+            foreach ($periodRows as $periodKey => $periodSales) {
+                $weekdays = [];
 
-                    return $this->weekdayKey($weekday) === $weekdayKey;
-                });
-                $aggregate = $this->dailySalesAggregateRow($weekdayLabel, $weekdaySales);
-                $daysCount = $aggregate['days_count'];
-                $weekdays[$weekdayKey] = [
-                    'label' => $weekdayLabel,
-                    'days_count' => $daysCount,
-                    'average_revenue' => $daysCount > 0 ? round($aggregate['total_revenue'] / $daysCount, 2) : 0,
-                    'average_delivery_count' => $daysCount > 0 ? round($aggregate['delivery_count'] / $daysCount, 1) : 0,
-                    'average_counter_count' => $daysCount > 0 ? round($aggregate['counter_count'] / $daysCount, 1) : 0,
+                foreach ($weekdayOptions as $weekdayKey => $weekdayLabel) {
+                    $weekdaySales = $periodSales->filter(function ($sale) use ($weekdayKey) {
+                        $weekday = $sale->weekday ?: $sale->sale_date->locale('pt_BR')->translatedFormat('l');
+
+                        return $this->weekdayKey($weekday) === $weekdayKey;
+                    });
+                    $aggregate = $this->dailySalesAggregateRow($weekdayLabel, $weekdaySales);
+                    $daysCount = $aggregate['days_count'];
+                    $weekdays[$weekdayKey] = [
+                        'label' => $weekdayLabel,
+                        'days_count' => $daysCount,
+                        'average_revenue' => $daysCount > 0 ? round($aggregate['total_revenue'] / $daysCount, 2) : 0,
+                        'average_delivery_count' => $daysCount > 0 ? round($aggregate['delivery_count'] / $daysCount, 1) : 0,
+                        'average_counter_count' => $daysCount > 0 ? round($aggregate['counter_count'] / $daysCount, 1) : 0,
+                    ];
+                }
+
+                $periodAggregate = $this->dailySalesAggregateRow('Periodo', $periodSales);
+                $periods[$periodKey] = [
+                    'days_count' => $periodAggregate['days_count'],
+                    'total_revenue' => $periodAggregate['total_revenue'],
+                    'delivery_count' => $periodAggregate['delivery_count'],
+                    'counter_count' => $periodAggregate['counter_count'],
+                    'weekdays' => $weekdays,
                 ];
             }
 
@@ -621,7 +640,8 @@ class DashboardController extends Controller
                 'label' => $month->format('m/Y'),
                 'sort' => $monthKey,
                 'days_count' => $monthSales->count(),
-                'weekdays' => $weekdays,
+                'is_current' => $month->equalTo($operationalMonth),
+                'periods' => $periods,
             ]);
         }
 
