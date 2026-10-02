@@ -442,18 +442,52 @@
                     </tbody>
                 </table>
             </div>
+            <h3 style="font-size:14px; margin:18px 0 8px;">Faturamento medio por dia da semana</h3>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
+                    <tbody data-daily-values-body data-metric="average_revenue" data-format="money"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card" style="margin-bottom:18px;">
+            <h2 class="panel-title">Media total de tickets por dia da semana</h2>
+            <p class="subtitle" style="margin-bottom:14px;">Soma os atendimentos delivery e balcao e mostra a media diaria de cada dia da semana.</p>
+            <div class="chart-box" style="height:440px;"><canvas id="weekdayMonthlyTotalTicketsChart"></canvas></div>
+            <h3 style="font-size:14px; margin:18px 0 8px;">Media total de tickets por dia da semana</h3>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
+                    <tbody data-daily-values-body data-metric="average_total_count" data-format="number"></tbody>
+                </table>
+            </div>
         </section>
 
         <section class="card" style="margin-bottom:18px;">
             <h2 class="panel-title">Media de tickets delivery por dia da semana</h2>
             <p class="subtitle" style="margin-bottom:14px;">Compara a quantidade media de atendimentos delivery em cada dia da semana, mes a mes.</p>
             <div class="chart-box" style="height:440px;"><canvas id="weekdayMonthlyDeliveryChart"></canvas></div>
+            <h3 style="font-size:14px; margin:18px 0 8px;">Media de tickets delivery por dia da semana</h3>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
+                    <tbody data-daily-values-body data-metric="average_delivery_count" data-format="number"></tbody>
+                </table>
+            </div>
         </section>
 
         <section class="card">
             <h2 class="panel-title">Media de tickets balcao por dia da semana</h2>
             <p class="subtitle" style="margin-bottom:14px;">Compara a quantidade media de atendimentos no balcao em cada dia da semana, mes a mes.</p>
             <div class="chart-box" style="height:440px;"><canvas id="weekdayMonthlyCounterChart"></canvas></div>
+            <h3 style="font-size:14px; margin:18px 0 8px;">Media de tickets balcao por dia da semana</h3>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
+                    <tbody data-daily-values-body data-metric="average_counter_count" data-format="number"></tbody>
+                </table>
+            </div>
         </section>
     @endif
 
@@ -735,6 +769,7 @@
                 };
 
                 createWeekdayMonthlyChart('weekdayMonthlyRevenueChart', 'average_revenue', true);
+                createWeekdayMonthlyChart('weekdayMonthlyTotalTicketsChart', 'average_total_count', false);
                 createWeekdayMonthlyChart('weekdayMonthlyDeliveryChart', 'average_delivery_count', false);
                 createWeekdayMonthlyChart('weekdayMonthlyCounterChart', 'average_counter_count', false);
 
@@ -812,6 +847,49 @@
                             daysBody.appendChild(row);
                         });
                     }
+
+                    document.querySelectorAll('[data-daily-values-body]').forEach((body) => {
+                        const metric = body.dataset.metric;
+                        const useMoney = body.dataset.format === 'money';
+                        body.replaceChildren();
+                        if (!visibleDailySalesMonths.length) {
+                            const row = document.createElement('tr');
+                            const cell = document.createElement('td');
+                            cell.colSpan = 8;
+                            cell.textContent = 'Selecione pelo menos um mes para visualizar os dados.';
+                            row.appendChild(cell);
+                            body.appendChild(row);
+                        }
+                        visibleDailySalesMonths.forEach((month) => {
+                            const row = document.createElement('tr');
+                            const monthCell = document.createElement('td');
+                            const strong = document.createElement('strong');
+                            strong.textContent = month.label;
+                            monthCell.appendChild(strong);
+                            row.appendChild(monthCell);
+                            dailySalesWeekdays.forEach(([weekdayKey]) => {
+                                const cell = document.createElement('td');
+                                const value = selectedPeriodRow(month).weekdays?.[weekdayKey]?.[metric] || 0;
+                                cell.textContent = useMoney ? money(value) : plainNumber(value);
+                                if (selectedDailyWeekday) {
+                                    cell.style.opacity = selectedDailyWeekday === weekdayKey ? '1' : '.3';
+                                    if (selectedDailyWeekday === weekdayKey) cell.style.fontWeight = '800';
+                                }
+                                row.appendChild(cell);
+                            });
+                            body.appendChild(row);
+                        });
+                    });
+
+                    document.querySelectorAll('[data-daily-days-body], [data-daily-values-body]').forEach((body) => {
+                        body.closest('table')?.querySelectorAll('thead th').forEach((header, index) => {
+                            if (index === 0 || !selectedDailyWeekday) {
+                                header.style.opacity = '1';
+                                return;
+                            }
+                            header.style.opacity = dailySalesWeekdays[index - 1]?.[0] === selectedDailyWeekday ? '1' : '.3';
+                        });
+                    });
 
                     const weekdayLabel = dailySalesWeekdays.find(([key]) => key === selectedDailyWeekday)?.[1];
                     const monthText = visibleDailySalesMonths.length === allDailySalesMonths.length
