@@ -10,11 +10,13 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\EmployeeReferenceController;
 use App\Http\Controllers\FinancialCategoryController;
+use App\Http\Controllers\MarketingImportController;
+use App\Http\Controllers\MarketingReportController;
 use App\Http\Controllers\MonthlyRevenueController;
 use App\Http\Controllers\PayableController;
-use App\Http\Controllers\ProductionInstallController;
-use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductClassController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductionInstallController;
 use App\Http\Controllers\PurchaseListController;
 use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\SpreadsheetImportController;
@@ -37,6 +39,12 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/dashboard', DashboardController::class)->middleware('company.role:owner,finance,viewer')->name('dashboard');
     Route::get('/resumo', SummaryController::class)->middleware('company.role:owner,finance,viewer')->name('resumo.index');
+    Route::get('/relatorios/marketing', [MarketingReportController::class, 'index'])->middleware('company.role:owner,finance,viewer')->name('relatorios.marketing.index');
+    Route::post('/relatorios/marketing/analisar', [MarketingReportController::class, 'analyze'])->middleware('company.role:owner,finance,viewer')->name('relatorios.marketing.analyze');
+    Route::middleware('company.role:owner,finance')->group(function () {
+        Route::get('/marketing/importar', [MarketingImportController::class, 'create'])->name('marketing.import.create');
+        Route::post('/marketing/importar', [MarketingImportController::class, 'store'])->name('marketing.import.store');
+    });
     Route::get('/usuarios', [CompanyUserController::class, 'index'])->middleware('company.role:owner')->name('usuarios.index');
     Route::post('/usuarios', [CompanyUserController::class, 'store'])->middleware('company.role:owner')->name('usuarios.store');
     Route::patch('/usuarios/{usuario}', [CompanyUserController::class, 'update'])->middleware('company.role:owner')->name('usuarios.update');
@@ -181,5 +189,3 @@ Route::middleware('auth')->group(function () {
         Route::delete('configuracoes/funcionarios/movimentos/{movimento}', [EmployeeReferenceController::class, 'destroyMovementType'])->name('configuracoes.funcionarios.movimentos.destroy');
     });
 });
-
-

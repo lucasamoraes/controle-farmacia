@@ -105,4 +105,14 @@ class Company extends Model
     {
         return $this->hasMany(Quotation::class);
     }
+
+    public function marketingImports(): HasMany
+    {
+        return $this->hasMany(MarketingImport::class);
+    }
+
+    public function marketingCampaignMetrics(): HasMany
+    {
+        return $this->hasMany(MarketingCampaignMetric::class);
+    }
 }

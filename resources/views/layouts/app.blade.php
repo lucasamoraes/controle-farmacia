@@ -167,8 +167,9 @@
                 @php
                     $role = auth()->user()->roleForCompany($company);
                     $isBuyer = $role === 'buyer';
-                    $reportsOpen = request()->routeIs('dashboard') || request()->routeIs('resumo.*');
+                    $reportsOpen = request()->routeIs('dashboard') || request()->routeIs('resumo.*') || request()->routeIs('relatorios.marketing.*');
                     $revenueOpen = request()->routeIs('faturamento-mensal.*') || request()->routeIs('imports.vendas-diarias.*');
+                    $marketingOpen = request()->routeIs('marketing.*');
                     $quotesOpen = request()->routeIs('listas-compras.*') || request()->routeIs('cotacoes.*') || request()->routeIs('produtos.*');
                     $payablesOpen = request()->routeIs('contas-a-pagar.*') || request()->routeIs('boletos.*') || request()->routeIs('fornecedores.*') || request()->routeIs('funcionarios.*') || request()->routeIs('faturas-cartao.*');
                     $settingsOpen = request()->routeIs('configuracoes.*') || request()->routeIs('imports.boletos.*') || request()->routeIs('usuarios.*');
@@ -180,6 +181,7 @@
                         <div class="nav-items">
                             <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">Dashboard</a>
                             <a href="{{ route('resumo.index') }}" class="{{ request()->routeIs('resumo.*') ? 'active' : '' }}">Resumo</a>
+                            <a href="{{ route('relatorios.marketing.index') }}" class="{{ request()->routeIs('relatorios.marketing.*') ? 'active' : '' }}">Marketing</a>
                         </div>
                     </details>
                     @endunless
@@ -195,6 +197,15 @@
                         </div>
                     </details>
                     @endunless
+
+                    @if (! $isBuyer && auth()->user()->canWriteFinance($company))
+                    <details class="nav-group" {{ $marketingOpen ? 'open' : '' }}>
+                        <summary>Marketing</summary>
+                        <div class="nav-items">
+                            <a href="{{ route('marketing.import.create') }}" class="{{ request()->routeIs('marketing.import.*') ? 'active' : '' }}">Importar campanhas</a>
+                        </div>
+                    </details>
+                    @endif
 
                     <details class="nav-group" {{ $quotesOpen ? 'open' : '' }}>
                         <summary>Cotacoes</summary>
