@@ -50,6 +50,7 @@ class MarketingModuleTest extends TestCase
         $this->actingAs($viewer)->get('/relatorios/marketing')
             ->assertOk()
             ->assertSee('Investimento e eficiencia por mes')
+            ->assertSee('Campeas do periodo')
             ->assertSee('Campanha Mensagens 01');
 
         $this->actingAs($viewer)->get('/marketing/importar')->assertForbidden();
@@ -78,7 +79,22 @@ class MarketingModuleTest extends TestCase
 
         Http::assertSent(fn ($request) => $request->url() === 'https://api.openai.com/v1/responses'
             && $request['store'] === false
-            && str_contains($request['input'], 'Campanha Mensagens 01'));
+            && str_contains($request['input'], 'Campanha Mensagens 01')
+            && str_contains($request['input'], 'Inativa')
+            && str_contains($request['instructions'], 'Nunca recomende pausar uma campanha inativa'));
+    }
+
+    public function test_report_can_filter_active_campaigns(): void
+    {
+        [$company, $owner] = $this->companyWithUser('owner');
+        $this->metric($company);
+        $this->metric($company, 'Campanha Ativa', 'active', 'active-metric', 200);
+
+        $this->actingAs($owner)->get('/relatorios/marketing?status=active')
+            ->assertOk()
+            ->assertSee('Campanha Ativa')
+            ->assertSee('R$ 200,00')
+            ->assertDontSee('R$ 397,96');
     }
 
     private function metaAdsSpreadsheet(float $spent = 397.96): string
@@ -104,25 +120,31 @@ class MarketingModuleTest extends TestCase
         return $path;
     }
 
-    private function metric(Company $company): void
-    {
+    private function metric(
+        Company $company,
+        string $name = 'Campanha Mensagens 01',
+        string $status = 'inactive',
+        string $fingerprint = 'metric',
+        float $spent = 397.96,
+    ): void {
         $import = MarketingImport::create([
             'company_id' => $company->id,
             'original_filename' => 'meta.xlsx',
         ]);
         $company->marketingCampaignMetrics()->create([
             'marketing_import_id' => $import->id,
-            'fingerprint' => hash('sha256', 'metric'),
+            'fingerprint' => hash('sha256', $fingerprint),
             'report_start' => '2026-04-01',
             'report_end' => '2026-04-30',
-            'campaign_name' => 'Campanha Mensagens 01',
+            'campaign_name' => $name,
+            'delivery_status' => $status,
             'results' => 79,
             'reach' => 14619,
             'impressions' => 30149,
             'link_clicks' => 188,
             'all_clicks' => 343,
             'frequency' => 2.06,
-            'amount_spent' => 397.96,
+            'amount_spent' => $spent,
             'cpc' => 2.12,
             'cpm' => 13.20,
             'ctr' => 0.62,
