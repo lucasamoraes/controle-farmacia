@@ -142,6 +142,7 @@ class DashboardController extends Controller
             ->when(in_array($status, ['open', 'paid', 'cancelled', 'overdue'], true), function ($query) use ($status, $company) {
                 if ($status === 'overdue') {
                     $query->where('status', 'open')->whereDate('due_date', '<', $this->operationalDate($company));
+
                     return;
                 }
 
@@ -643,6 +644,23 @@ class DashboardController extends Controller
                 'sort' => $monthKey,
                 'days_count' => $monthSales->count(),
                 'is_current' => $month->equalTo($operationalMonth),
+                'days' => $monthSales->map(function ($sale) {
+                    $deliveryRevenue = (float) $sale->delivery_revenue;
+                    $counterRevenue = (float) $sale->counter_revenue;
+                    $totalRevenue = $deliveryRevenue + $counterRevenue;
+                    if ($totalRevenue <= 0) {
+                        $totalRevenue = (float) $sale->amount;
+                    }
+                    $weekday = $sale->weekday ?: $sale->sale_date->locale('pt_BR')->translatedFormat('l');
+
+                    return [
+                        'day' => $sale->sale_date->day,
+                        'weekday' => $this->weekdayKey($weekday),
+                        'total_revenue' => round($totalRevenue, 2),
+                        'delivery_count' => (int) $sale->delivery_sales_count,
+                        'counter_count' => (int) $sale->counter_sales_count,
+                    ];
+                })->values()->all(),
                 'periods' => $periods,
             ]);
         }
@@ -756,6 +774,7 @@ class DashboardController extends Controller
             ->when(in_array($status, ['open', 'paid', 'cancelled', 'overdue'], true), function ($query) use ($status, $company) {
                 if ($status === 'overdue') {
                     $query->where('credit_card_invoices.status', 'open')->whereDate('credit_card_invoices.due_date', '<', $this->operationalDate($company));
+
                     return;
                 }
 

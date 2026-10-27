@@ -207,6 +207,10 @@ class SummaryDashboardTest extends TestCase
             ->assertSee('Ticket medio por dia da semana')
             ->assertSee('Media de tickets delivery por dia da semana')
             ->assertSee('Media de tickets balcao por dia da semana')
+            ->assertSee('Intervalo personalizado de dias')
+            ->assertSee('Dia 01 ao dia 31')
+            ->assertSee('Media periodo')
+            ->assertSee('Total periodo')
             ->assertDontSee('Mesmo dia do mes');
 
         $dashboard = $response->viewData('dailySalesDashboard');
@@ -220,6 +224,11 @@ class SummaryDashboardTest extends TestCase
         $this->assertEquals(4.5, $september['periods']['all']['weekdays']['segunda-feira']['average_counter_count']);
         $this->assertSame(1, $september['periods']['first']['days_count']);
         $this->assertSame(1, $september['periods']['second']['days_count']);
+        $this->assertSame(7, $september['days'][0]['day']);
+        $this->assertSame('segunda-feira', $september['days'][0]['weekday']);
+        $this->assertEquals(100.0, $september['days'][0]['total_revenue']);
+        $this->assertSame(2, $september['days'][0]['delivery_count']);
+        $this->assertSame(3, $september['days'][0]['counter_count']);
 
         Carbon::setTestNow();
     }

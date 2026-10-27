@@ -410,6 +410,22 @@
 
                 <button class="btn secondary" type="button" data-daily-reset>Limpar filtros</button>
             </div>
+
+            <div class="daily-day-range" data-daily-day-range style="--range-start:0%; --range-end:100%;">
+                <div class="daily-day-range-heading">
+                    <div>
+                        <strong>Intervalo personalizado de dias</strong>
+                        <span>Arraste as extremidades para comparar qualquer trecho do mes.</span>
+                    </div>
+                    <output data-daily-day-output>Dia 01 ao dia 31</output>
+                </div>
+                <div class="daily-day-slider">
+                    <div class="daily-day-rail"><div class="daily-day-fill"></div></div>
+                    <input type="range" min="1" max="31" step="1" value="1" aria-label="Dia inicial" data-daily-day-start>
+                    <input type="range" min="1" max="31" step="1" value="31" aria-label="Dia final" data-daily-day-end>
+                </div>
+                <div class="daily-day-scale" aria-hidden="true"><span>01</span><span>05</span><span>10</span><span>15</span><span>20</span><span>25</span><span>31</span></div>
+            </div>
             <p class="subtitle" style="margin-top:12px;" data-daily-filter-summary>Todos os meses | Mes inteiro | Todos os dias da semana</p>
         </section>
 
@@ -427,7 +443,7 @@
             <h3 style="font-size:14px; margin:18px 0 8px;">Dias faturados usados na media</h3>
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
+                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach<th>Total periodo</th></tr></thead>
                     <tbody data-daily-days-body>
                         @forelse (($dailySalesDashboard['months'] ?? []) as $month)
                             <tr>
@@ -435,6 +451,7 @@
                                 @foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $key => $label)
                                     <td>{{ $month['periods']['all']['weekdays'][$key]['days_count'] ?? 0 }} dia(s)</td>
                                 @endforeach
+                                <td><strong>{{ $month['periods']['all']['days_count'] ?? 0 }} dia(s)</strong></td>
                             </tr>
                         @empty
                             <tr><td colspan="8">Nenhuma venda diaria cadastrada.</td></tr>
@@ -445,7 +462,7 @@
             <h3 style="font-size:14px; margin:18px 0 8px;">Faturamento medio por dia da semana</h3>
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
+                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach<th>Media periodo</th></tr></thead>
                     <tbody data-daily-values-body data-metric="average_revenue" data-format="money"></tbody>
                 </table>
             </div>
@@ -458,7 +475,7 @@
             <h3 style="font-size:14px; margin:18px 0 8px;">Media total de tickets por dia da semana</h3>
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
+                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach<th>Media periodo</th></tr></thead>
                     <tbody data-daily-values-body data-metric="average_total_count" data-format="number"></tbody>
                 </table>
             </div>
@@ -471,7 +488,7 @@
             <h3 style="font-size:14px; margin:18px 0 8px;">Ticket medio por dia da semana</h3>
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
+                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach<th>Media periodo</th></tr></thead>
                     <tbody data-daily-values-body data-metric="average_ticket" data-format="money"></tbody>
                 </table>
             </div>
@@ -484,7 +501,7 @@
             <h3 style="font-size:14px; margin:18px 0 8px;">Media de tickets delivery por dia da semana</h3>
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
+                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach<th>Media periodo</th></tr></thead>
                     <tbody data-daily-values-body data-metric="average_delivery_count" data-format="number"></tbody>
                 </table>
             </div>
@@ -497,7 +514,7 @@
             <h3 style="font-size:14px; margin:18px 0 8px;">Media de tickets balcao por dia da semana</h3>
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach</tr></thead>
+                    <thead><tr><th>Mes</th>@foreach (($dailySalesDashboard['weekdayOptions'] ?? []) as $label)<th>{{ $label }}</th>@endforeach<th>Media periodo</th></tr></thead>
                     <tbody data-daily-values-body data-metric="average_counter_count" data-format="number"></tbody>
                 </table>
             </div>
@@ -566,6 +583,30 @@
                 @endforelse
             </div>
         </section>
+    @endif
+
+    @if ($dashboardTab === 'vendas-diarias')
+        <style>
+            .daily-day-range { margin-top:18px; padding-top:16px; border-top:1px solid var(--line); }
+            .daily-day-range-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+            .daily-day-range-heading > div { display:grid; gap:4px; }
+            .daily-day-range-heading span { color:var(--muted); font-size:12px; }
+            .daily-day-range-heading output { flex:0 0 auto; padding:7px 10px; border-radius:6px; background:#e8eef5; color:#243b53; font-weight:800; }
+            .daily-day-slider { position:relative; height:34px; margin-top:12px; }
+            .daily-day-rail { position:absolute; left:9px; right:9px; top:14px; height:6px; border-radius:999px; background:#d9e1ec; overflow:hidden; }
+            .daily-day-fill { position:absolute; top:0; bottom:0; left:var(--range-start); right:calc(100% - var(--range-end)); background:var(--brand); }
+            .daily-day-slider input[type="range"] { position:absolute; inset:0; z-index:2; width:100%; height:34px; min-height:0; margin:0; padding:0; border:0; background:transparent; appearance:none; pointer-events:none; }
+            .daily-day-slider input[type="range"]:last-child { z-index:3; }
+            .daily-day-slider input[type="range"]::-webkit-slider-runnable-track { height:6px; background:transparent; }
+            .daily-day-slider input[type="range"]::-webkit-slider-thumb { width:20px; height:20px; margin-top:-7px; border:3px solid #fff; border-radius:50%; background:var(--brand); box-shadow:0 0 0 1px var(--brand), 0 2px 5px rgba(15,23,42,.2); appearance:none; pointer-events:auto; cursor:grab; }
+            .daily-day-slider input[type="range"]::-moz-range-track { height:6px; background:transparent; }
+            .daily-day-slider input[type="range"]::-moz-range-thumb { width:16px; height:16px; border:3px solid #fff; border-radius:50%; background:var(--brand); box-shadow:0 0 0 1px var(--brand), 0 2px 5px rgba(15,23,42,.2); pointer-events:auto; cursor:grab; }
+            .daily-day-scale { display:flex; justify-content:space-between; padding:0 3px; color:var(--muted); font-size:11px; }
+            @media (max-width:760px) {
+                .daily-day-range-heading { align-items:stretch; flex-direction:column; }
+                .daily-day-range-heading output { align-self:flex-start; }
+            }
+        </style>
     @endif
 
     @if (in_array($dashboardTab, ['financeiro', 'funcionarios', 'vendas', 'vendas-diarias'], true))
@@ -706,10 +747,17 @@
                 const weekdayColors = ['#2563eb', '#0f766e', '#b7791f', '#7c3aed', '#dc2626', '#0891b2', '#475569'];
                 const weekdayCharts = [];
                 const selectedDailyMonths = new Set(allDailySalesMonths.map((month) => month.sort));
-                const dailyPeriodLabels = { all: 'Mes inteiro', first: 'Dias 1-10', second: 'Dias 11-20', third: 'Dias 21-fechamento' };
+                const dailyPeriodLabels = { all: 'Mes inteiro', first: 'Dias 01-10', second: 'Dias 11-20', third: 'Dias 21-fechamento' };
+                const dailyPeriodRanges = { all: [1, 31], first: [1, 10], second: [11, 20], third: [21, 31] };
                 let activeDailyPeriod = 'all';
+                let dailyDayStart = 1;
+                let dailyDayEnd = 31;
                 let selectedDailyWeekday = null;
                 let visibleDailySalesMonths = [...allDailySalesMonths];
+                const dailyDayRange = document.querySelector('[data-daily-day-range]');
+                const dailyDayStartInput = document.querySelector('[data-daily-day-start]');
+                const dailyDayEndInput = document.querySelector('[data-daily-day-end]');
+                const dailyDayOutput = document.querySelector('[data-daily-day-output]');
                 const fadedColor = (hex) => {
                     const value = hex.replace('#', '');
                     const red = parseInt(value.substring(0, 2), 16);
@@ -718,7 +766,67 @@
                     return `rgba(${red}, ${green}, ${blue}, .16)`;
                 };
                 const selectedMonthRows = () => allDailySalesMonths.filter((month) => selectedDailyMonths.has(month.sort));
-                const selectedPeriodRow = (month) => month.periods?.[activeDailyPeriod] || { days_count: 0, total_revenue: 0, delivery_count: 0, counter_count: 0, weekdays: {} };
+                const emptyDailyPeriod = () => ({ days_count: 0, total_revenue: 0, delivery_count: 0, counter_count: 0, weekdays: {} });
+                const aggregateDailyRows = (rows) => {
+                    const daysCount = rows.length;
+                    const totalRevenue = rows.reduce((total, row) => total + Number(row.total_revenue || 0), 0);
+                    const deliveryCount = rows.reduce((total, row) => total + Number(row.delivery_count || 0), 0);
+                    const counterCount = rows.reduce((total, row) => total + Number(row.counter_count || 0), 0);
+                    const totalCount = deliveryCount + counterCount;
+                    return {
+                        days_count: daysCount,
+                        total_revenue: totalRevenue,
+                        delivery_count: deliveryCount,
+                        counter_count: counterCount,
+                        average_revenue: daysCount > 0 ? totalRevenue / daysCount : 0,
+                        average_total_count: daysCount > 0 ? totalCount / daysCount : 0,
+                        average_ticket: totalCount > 0 ? totalRevenue / totalCount : 0,
+                        average_delivery_count: daysCount > 0 ? deliveryCount / daysCount : 0,
+                        average_counter_count: daysCount > 0 ? counterCount / daysCount : 0
+                    };
+                };
+                const customDailyPeriod = (month) => {
+                    const rows = (month.days || []).filter((row) => Number(row.day) >= dailyDayStart && Number(row.day) <= dailyDayEnd);
+                    const aggregate = aggregateDailyRows(rows);
+                    const weekdays = {};
+                    dailySalesWeekdays.forEach(([weekdayKey, weekdayLabel]) => {
+                        weekdays[weekdayKey] = {
+                            label: weekdayLabel,
+                            ...aggregateDailyRows(rows.filter((row) => row.weekday === weekdayKey))
+                        };
+                    });
+                    return { ...aggregate, weekdays };
+                };
+                const selectedPeriodRow = (month) => activeDailyPeriod === 'custom'
+                    ? customDailyPeriod(month)
+                    : (month.periods?.[activeDailyPeriod] || emptyDailyPeriod());
+                const periodMetricValue = (period, metric) => {
+                    const days = Number(period.days_count || 0);
+                    const revenue = Number(period.total_revenue || 0);
+                    const delivery = Number(period.delivery_count || 0);
+                    const counter = Number(period.counter_count || 0);
+                    const tickets = delivery + counter;
+                    const values = {
+                        average_revenue: days > 0 ? revenue / days : 0,
+                        average_total_count: days > 0 ? tickets / days : 0,
+                        average_ticket: tickets > 0 ? revenue / tickets : 0,
+                        average_delivery_count: days > 0 ? delivery / days : 0,
+                        average_counter_count: days > 0 ? counter / days : 0
+                    };
+                    return values[metric] || 0;
+                };
+                const activeDailyPeriodLabel = () => activeDailyPeriod === 'custom'
+                    ? `Dias ${String(dailyDayStart).padStart(2, '0')}-${String(dailyDayEnd).padStart(2, '0')}`
+                    : dailyPeriodLabels[activeDailyPeriod];
+                const syncDailyDayRange = () => {
+                    const startPercent = ((dailyDayStart - 1) / 30) * 100;
+                    const endPercent = ((dailyDayEnd - 1) / 30) * 100;
+                    dailyDayRange?.style.setProperty('--range-start', `${startPercent}%`);
+                    dailyDayRange?.style.setProperty('--range-end', `${endPercent}%`);
+                    if (dailyDayStartInput) dailyDayStartInput.value = String(dailyDayStart);
+                    if (dailyDayEndInput) dailyDayEndInput.value = String(dailyDayEnd);
+                    if (dailyDayOutput) dailyDayOutput.textContent = `Dia ${String(dailyDayStart).padStart(2, '0')} ao dia ${String(dailyDayEnd).padStart(2, '0')}`;
+                };
                 const setDailyWeekday = (weekdayKey) => {
                     selectedDailyWeekday = selectedDailyWeekday === weekdayKey ? null : weekdayKey;
                     refreshDailySalesDashboard();
@@ -837,7 +945,7 @@
                         if (!visibleDailySalesMonths.length) {
                             const row = document.createElement('tr');
                             const cell = document.createElement('td');
-                            cell.colSpan = 8;
+                            cell.colSpan = 9;
                             cell.textContent = 'Selecione pelo menos um mes para visualizar os dados.';
                             row.appendChild(cell);
                             daysBody.appendChild(row);
@@ -858,6 +966,11 @@
                                 }
                                 row.appendChild(cell);
                             });
+                            const periodCell = document.createElement('td');
+                            const periodStrong = document.createElement('strong');
+                            periodStrong.textContent = `${selectedPeriodRow(month).days_count || 0} dia(s)`;
+                            periodCell.appendChild(periodStrong);
+                            row.appendChild(periodCell);
                             daysBody.appendChild(row);
                         });
                     }
@@ -869,7 +982,7 @@
                         if (!visibleDailySalesMonths.length) {
                             const row = document.createElement('tr');
                             const cell = document.createElement('td');
-                            cell.colSpan = 8;
+                            cell.colSpan = 9;
                             cell.textContent = 'Selecione pelo menos um mes para visualizar os dados.';
                             row.appendChild(cell);
                             body.appendChild(row);
@@ -891,13 +1004,19 @@
                                 }
                                 row.appendChild(cell);
                             });
+                            const periodCell = document.createElement('td');
+                            const periodStrong = document.createElement('strong');
+                            const periodValue = periodMetricValue(selectedPeriodRow(month), metric);
+                            periodStrong.textContent = useMoney ? money(periodValue) : plainNumber(periodValue);
+                            periodCell.appendChild(periodStrong);
+                            row.appendChild(periodCell);
                             body.appendChild(row);
                         });
                     });
 
                     document.querySelectorAll('[data-daily-days-body], [data-daily-values-body]').forEach((body) => {
                         body.closest('table')?.querySelectorAll('thead th').forEach((header, index) => {
-                            if (index === 0 || !selectedDailyWeekday) {
+                            if (index === 0 || index === dailySalesWeekdays.length + 1 || !selectedDailyWeekday) {
                                 header.style.opacity = '1';
                                 return;
                             }
@@ -910,7 +1029,7 @@
                         ? 'Todos os meses'
                         : `${visibleDailySalesMonths.length} mes(es) selecionado(s)`;
                     const summary = document.querySelector('[data-daily-filter-summary]');
-                    if (summary) summary.textContent = `${monthText} | ${dailyPeriodLabels[activeDailyPeriod]} | ${weekdayLabel || 'Todos os dias da semana'}`;
+                    if (summary) summary.textContent = `${monthText} | ${activeDailyPeriodLabel()} | ${weekdayLabel || 'Todos os dias da semana'}`;
                 };
 
                 document.querySelectorAll('[data-daily-months] input[type="checkbox"]').forEach((input) => {
@@ -936,12 +1055,30 @@
                 document.querySelectorAll('[data-daily-period]').forEach((button) => {
                     button.addEventListener('click', () => {
                         activeDailyPeriod = button.dataset.dailyPeriod;
+                        [dailyDayStart, dailyDayEnd] = dailyPeriodRanges[activeDailyPeriod] || [1, 31];
                         document.querySelectorAll('[data-daily-period]').forEach((item) => item.classList.toggle('active', item === button));
+                        syncDailyDayRange();
                         refreshDailySalesDashboard();
                     });
                 });
+                const applyCustomDailyRange = (changedInput) => {
+                    dailyDayStart = Number(dailyDayStartInput?.value || 1);
+                    dailyDayEnd = Number(dailyDayEndInput?.value || 31);
+                    if (dailyDayStart > dailyDayEnd) {
+                        if (changedInput === dailyDayStartInput) dailyDayEnd = dailyDayStart;
+                        else dailyDayStart = dailyDayEnd;
+                    }
+                    activeDailyPeriod = 'custom';
+                    document.querySelectorAll('[data-daily-period]').forEach((button) => button.classList.remove('active'));
+                    syncDailyDayRange();
+                    refreshDailySalesDashboard();
+                };
+                dailyDayStartInput?.addEventListener('input', () => applyCustomDailyRange(dailyDayStartInput));
+                dailyDayEndInput?.addEventListener('input', () => applyCustomDailyRange(dailyDayEndInput));
                 document.querySelector('[data-daily-reset]')?.addEventListener('click', () => {
                     activeDailyPeriod = 'all';
+                    dailyDayStart = 1;
+                    dailyDayEnd = 31;
                     selectedDailyWeekday = null;
                     selectedDailyMonths.clear();
                     allDailySalesMonths.forEach((month) => selectedDailyMonths.add(month.sort));
@@ -950,8 +1087,10 @@
                         input.closest('label')?.classList.add('active');
                     });
                     document.querySelectorAll('[data-daily-period]').forEach((button) => button.classList.toggle('active', button.dataset.dailyPeriod === 'all'));
+                    syncDailyDayRange();
                     refreshDailySalesDashboard();
                 });
+                syncDailyDayRange();
                 refreshDailySalesDashboard();
 
                 const ticketPeriodLabels = ticketPeriods.map((row) => row.is_current ? `${row.label} ate dia ${row.last_day_recorded}` : row.label);
