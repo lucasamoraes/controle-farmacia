@@ -209,11 +209,13 @@ class SummaryDashboardTest extends TestCase
             ->assertSee('Media de tickets balcao por dia da semana')
             ->assertSee('Intervalo personalizado de dias')
             ->assertSee('Dia 01 ao dia 31')
+            ->assertSee('Faturamento total no periodo')
             ->assertSee('Media periodo')
             ->assertSee('Total periodo')
             ->assertDontSee('Mesmo dia do mes');
 
         $dashboard = $response->viewData('dailySalesDashboard');
+        $this->assertEquals(390.0, $dashboard['summary']['total_revenue']);
         $september = collect($dashboard['months'])->firstWhere('label', '09/2026');
         $this->assertNotNull($september);
         $this->assertSame(2, $september['periods']['all']['weekdays']['segunda-feira']['days_count']);

@@ -674,6 +674,7 @@ class DashboardController extends Controller
             'summary' => [
                 'months_count' => $monthRows->count(),
                 'days_count' => $aggregate['days_count'],
+                'total_revenue' => round($aggregate['total_revenue'], 2),
                 'average_revenue' => round($aggregate['total_revenue'] / $daysCount, 2),
                 'average_delivery_count' => round($aggregate['delivery_count'] / $daysCount, 1),
                 'average_counter_count' => round($aggregate['counter_count'] / $daysCount, 1),

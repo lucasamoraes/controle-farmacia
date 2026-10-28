@@ -429,9 +429,10 @@
             <p class="subtitle" style="margin-top:12px;" data-daily-filter-summary>Todos os meses | Mes inteiro | Todos os dias da semana</p>
         </section>
 
-        <div class="grid stats" style="margin-top:18px;">
+        <div class="grid stats daily-summary-grid" style="margin-top:18px;">
             <div class="card"><div class="metric-label">Meses analisados</div><div class="metric-value" data-daily-summary="months">{{ $dailySalesDashboard['summary']['months_count'] ?? 0 }}</div></div>
             <div class="card"><div class="metric-label">Dias faturados</div><div class="metric-value" data-daily-summary="days">{{ number_format($dailySalesDashboard['summary']['days_count'] ?? 0, 0, ',', '.') }}</div></div>
+            <div class="card"><div class="metric-label">Faturamento total no periodo</div><div class="metric-value" data-daily-summary="total-revenue">{{ $fmtMoney($dailySalesDashboard['summary']['total_revenue'] ?? 0) }}</div></div>
             <div class="card"><div class="metric-label">Faturamento medio por dia</div><div class="metric-value" data-daily-summary="revenue">{{ $fmtMoney($dailySalesDashboard['summary']['average_revenue'] ?? 0) }}</div></div>
             <div class="card"><div class="metric-label">Tickets medios por dia</div><div class="metric-value" data-daily-summary="tickets">{{ number_format(($dailySalesDashboard['summary']['average_delivery_count'] ?? 0) + ($dailySalesDashboard['summary']['average_counter_count'] ?? 0), 1, ',', '.') }}</div><p class="subtitle" style="margin-top:6px;" data-daily-summary="channels">Delivery {{ number_format($dailySalesDashboard['summary']['average_delivery_count'] ?? 0, 1, ',', '.') }} | Balcao {{ number_format($dailySalesDashboard['summary']['average_counter_count'] ?? 0, 1, ',', '.') }}</p></div>
         </div>
@@ -587,6 +588,7 @@
 
     @if ($dashboardTab === 'vendas-diarias')
         <style>
+            .daily-summary-grid { grid-template-columns:repeat(5, minmax(0, 1fr)); }
             .daily-day-range { margin-top:18px; padding-top:16px; border-top:1px solid var(--line); }
             .daily-day-range-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
             .daily-day-range-heading > div { display:grid; gap:4px; }
@@ -602,7 +604,11 @@
             .daily-day-slider input[type="range"]::-moz-range-track { height:6px; background:transparent; }
             .daily-day-slider input[type="range"]::-moz-range-thumb { width:16px; height:16px; border:3px solid #fff; border-radius:50%; background:var(--brand); box-shadow:0 0 0 1px var(--brand), 0 2px 5px rgba(15,23,42,.2); pointer-events:auto; cursor:grab; }
             .daily-day-scale { display:flex; justify-content:space-between; padding:0 3px; color:var(--muted); font-size:11px; }
+            @media (max-width:980px) {
+                .daily-summary-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+            }
             @media (max-width:760px) {
+                .daily-summary-grid { grid-template-columns:1fr; }
                 .daily-day-range-heading { align-items:stretch; flex-direction:column; }
                 .daily-day-range-heading output { align-self:flex-start; }
             }
@@ -935,6 +941,7 @@
                     const averageCounter = counterCount / divisor;
                     document.querySelector('[data-daily-summary="months"]')?.replaceChildren(document.createTextNode(String(visibleDailySalesMonths.length)));
                     document.querySelector('[data-daily-summary="days"]')?.replaceChildren(document.createTextNode(plainNumber(totalDays)));
+                    document.querySelector('[data-daily-summary="total-revenue"]')?.replaceChildren(document.createTextNode(money(totalRevenue)));
                     document.querySelector('[data-daily-summary="revenue"]')?.replaceChildren(document.createTextNode(money(totalRevenue / divisor)));
                     document.querySelector('[data-daily-summary="tickets"]')?.replaceChildren(document.createTextNode(plainNumber(averageDelivery + averageCounter)));
                     document.querySelector('[data-daily-summary="channels"]')?.replaceChildren(document.createTextNode(`Delivery ${plainNumber(averageDelivery)} | Balcao ${plainNumber(averageCounter)}`));
