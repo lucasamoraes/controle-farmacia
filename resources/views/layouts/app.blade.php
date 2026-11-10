@@ -11,10 +11,10 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <title>{{ config('app.name', 'Controle Farmacia') }}</title>
     <style>
-        :root { --bg:#f5f7fb; --panel:#ffffff; --ink:#17202a; --muted:#697586; --line:#d9e1ec; --brand:#0f766e; --brand-dark:#115e59; --danger:#b42318; --warn:#b7791f; --sidebar:#102a43; }
+        :root { --bg:#f5f7fb; --panel:#ffffff; --ink:#17202a; --muted:#697586; --line:#d9e1ec; --brand:#0f766e; --brand-dark:#115e59; --danger:#b42318; --warn:#b7791f; --sidebar:#102a43; --safe-top:env(safe-area-inset-top, 0px); --safe-right:env(safe-area-inset-right, 0px); --safe-bottom:env(safe-area-inset-bottom, 0px); --safe-left:env(safe-area-inset-left, 0px); }
         * { box-sizing:border-box; }
         html { max-width:100%; overflow-x:hidden; }
-        body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--ink); font-size:14px; max-width:100%; overflow-x:hidden; }
+        body { margin:0; min-height:100dvh; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--ink); font-size:14px; max-width:100%; overflow-x:hidden; }
         body.nav-open { overflow:hidden; }
         body.sidebar-collapsed .app { grid-template-columns:74px minmax(0,1fr); }
         body.sidebar-collapsed .sidebar { padding:18px 10px; }
@@ -25,7 +25,9 @@
         body.sidebar-collapsed .nav-group[open] summary::after { content:'-'; }
         a { color:inherit; text-decoration:none; }
         .app { min-height:100vh; display:grid; grid-template-columns:240px minmax(0,1fr); }
-        .sidebar { background:var(--sidebar); color:#eef6ff; padding:22px 18px; display:flex; flex-direction:column; gap:22px; min-height:100vh; position:sticky; top:0; }
+        .sidebar { background:var(--sidebar); color:#eef6ff; padding:22px 18px; display:flex; flex-direction:column; gap:22px; height:100vh; min-height:0; overflow-y:auto; overscroll-behavior:contain; position:sticky; top:0; }
+        .sidebar-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+        .sidebar-close { display:none; flex:0 0 40px; width:40px; height:40px; border:1px solid rgba(216,231,242,.24); border-radius:6px; background:rgba(255,255,255,.08); color:#fff; font-size:24px; line-height:1; cursor:pointer; align-items:center; justify-content:center; }
         .brand { font-size:18px; font-weight:700; line-height:1.2; }
         .brand span { display:block; color:#a8c5da; font-size:12px; font-weight:400; margin-top:4px; }
         .nav { display:grid; gap:8px; }
@@ -43,6 +45,8 @@
         .main { min-width:0; max-width:100%; overflow:hidden; }
         .topbar { min-height:64px; background:var(--panel); border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; padding:0 28px; gap:14px; position:sticky; top:0; z-index:20; }
         .topbar-left, .topbar-actions { display:flex; align-items:center; gap:12px; min-width:0; }
+        .topbar-title { min-width:0; }
+        .topbar-title strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .menu-toggle { display:none; border:1px solid var(--line); background:#fff; color:var(--ink); width:40px; height:40px; border-radius:6px; font-size:22px; line-height:1; cursor:pointer; }
         .sidebar-toggle { border:1px solid var(--line); background:#fff; color:var(--ink); width:40px; height:40px; border-radius:6px; font-size:18px; cursor:pointer; }
         .install-btn { display:none; }
@@ -116,22 +120,23 @@
         @media (max-width: 980px) { .stats { grid-template-columns:repeat(2, minmax(0,1fr)); } .content { padding:22px; } }
         @media (max-width: 760px) {
             .app { display:block; }
-            .sidebar { position:fixed; inset:0 auto 0 0; width:min(82vw, 300px); min-height:100vh; transform:translateX(-105%); transition:transform .18s ease; z-index:50; box-shadow:20px 0 40px rgba(16,42,67,.22); }
+            .sidebar { position:fixed; inset:0 auto 0 0; width:min(86vw, 320px); height:100dvh; min-height:0; padding:calc(18px + var(--safe-top)) 18px calc(18px + var(--safe-bottom)); transform:translateX(-105%); transition:transform .18s ease; z-index:50; box-shadow:20px 0 40px rgba(16,42,67,.22); }
             body.nav-open .sidebar { transform:translateX(0); }
             .mobile-backdrop { display:none; position:fixed; inset:0; background:rgba(15,23,42,.38); z-index:40; border:0; }
             body.nav-open .mobile-backdrop { display:block; }
             .menu-toggle { display:inline-flex; align-items:center; justify-content:center; }
+            .sidebar-close { display:inline-flex; }
             .sidebar-toggle { display:none; }
             body.sidebar-collapsed .app { display:block; }
-            body.sidebar-collapsed .sidebar { padding:22px 18px; }
+            body.sidebar-collapsed .sidebar { padding:calc(18px + var(--safe-top)) 18px calc(18px + var(--safe-bottom)); }
             body.sidebar-collapsed .brand span, body.sidebar-collapsed .nav-items, body.sidebar-collapsed .sidebar-footer { display:block; }
             body.sidebar-collapsed .brand { font-size:18px; text-align:left; }
             body.sidebar-collapsed .nav-group summary { justify-content:space-between; padding:11px 12px; font-size:14px; }
-            .topbar { padding:10px 12px; align-items:center; gap:8px; }
+            .topbar { min-height:calc(60px + var(--safe-top)); padding:calc(10px + var(--safe-top)) calc(12px + var(--safe-right)) 10px calc(12px + var(--safe-left)); align-items:center; gap:8px; }
             .topbar-left { flex:1 1 auto; }
             .topbar-actions { margin-left:auto; gap:8px; }
             .topbar-actions form { display:none; }
-            .content { padding:16px; max-width:none; width:100%; }
+            .content { padding:16px max(16px, var(--safe-right)) calc(16px + var(--safe-bottom)) max(16px, var(--safe-left)); max-width:none; width:100%; }
             .stats, .field-grid { grid-template-columns:1fr; }
             .filter-grid, .filter-grid[style] { grid-template-columns:1fr !important; }
             .filter-actions { width:100%; }
@@ -163,7 +168,10 @@
         <div class="app">
             <button class="mobile-backdrop" type="button" data-close-menu aria-label="Fechar menu"></button>
             <aside class="sidebar" id="app-sidebar">
-                <div class="brand">Controle Farmacia<span>{{ $company->trade_name ?? $company->name ?? 'Financeiro' }}</span></div>
+                <div class="sidebar-head">
+                    <div class="brand">Controle Farmacia<span>{{ $company->trade_name ?? $company->name ?? 'Financeiro' }}</span></div>
+                    <button class="sidebar-close" type="button" data-close-menu aria-label="Fechar menu">&times;</button>
+                </div>
                 @php
                     $role = auth()->user()->roleForCompany($company);
                     $isBuyer = $role === 'buyer';
@@ -262,7 +270,7 @@
                     <div class="topbar-left">
                         <button class="menu-toggle" type="button" data-menu-toggle aria-controls="app-sidebar" aria-expanded="false">=</button>
                         <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Recolher menu">=</button>
-                        <div>
+                        <div class="topbar-title">
                             <strong>{{ $pageTitle ?? 'Financeiro' }}</strong>
                             <div style="color:var(--muted); font-size:12px; margin-top:3px;">{{ now()->format('d/m/Y') }}</div>
                         </div>
