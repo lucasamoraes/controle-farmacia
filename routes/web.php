@@ -49,6 +49,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/usuarios', [CompanyUserController::class, 'store'])->middleware('company.role:owner')->name('usuarios.store');
     Route::patch('/usuarios/{usuario}', [CompanyUserController::class, 'update'])->middleware('company.role:owner')->name('usuarios.update');
     Route::delete('/usuarios/{usuario}', [CompanyUserController::class, 'destroy'])->middleware('company.role:owner')->name('usuarios.destroy');
+    Route::post('/usuarios/ambiente-demonstracao', [CompanyUserController::class, 'storeDemo'])->middleware('company.role:owner')->name('usuarios.demo.store');
 
     Route::get('faturamento-mensal', [MonthlyRevenueController::class, 'index'])->middleware('company.role:owner,finance,viewer')->name('faturamento-mensal.index');
     Route::middleware('company.role:owner,finance')->group(function () {

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\User;
+use App\Services\DemoPharmacyDataGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -96,6 +97,22 @@ class CompanyUserController extends Controller
         $company->users()->detach($usuario->id);
 
         return redirect()->route('usuarios.index')->with('status', 'Usuario removido da farmacia.');
+    }
+
+    public function storeDemo(Request $request, DemoPharmacyDataGenerator $generator): RedirectResponse
+    {
+        $data = $request->validate([
+            'demo_name' => ['required', 'string', 'max:255'],
+            'demo_email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'demo_password' => ['required', 'string', 'min:10', 'confirmed'],
+        ]);
+
+        $generator->generate($data['demo_name'], $data['demo_email'], $data['demo_password']);
+
+        return redirect()->route('usuarios.index')->with(
+            'status',
+            'FARMA TESTE criada. O visitante ja pode entrar com o e-mail e a senha informados.'
+        );
     }
 
     private function company(): Company

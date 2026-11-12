@@ -83,4 +83,32 @@
             </div>
         </section>
     </div>
+
+    <details class="card" style="margin-top:22px;">
+        <summary style="cursor:pointer; font-weight:800;">Criar empresa demonstrativa FARMA TESTE</summary>
+        <div style="margin-top:16px; max-width:760px;">
+            <p class="subtitle">Cria uma farmacia separada com dados ficticios de janeiro a dezembro de 2026. O usuario tera perfil de dono apenas nessa empresa.</p>
+            <form class="form" method="post" action="{{ route('usuarios.demo.store') }}" style="margin-top:16px;" data-confirm-title="Criar FARMA TESTE" data-confirm-message="Deseja criar a empresa demonstrativa completa? O processo pode levar alguns segundos." data-confirm-button="Criar ambiente">
+                @csrf
+                <div class="field-grid">
+                    <label>Nome do visitante
+                        <input type="text" name="demo_name" value="{{ old('demo_name', 'Usuario Demonstracao') }}" required>
+                    </label>
+                    <label>E-mail para acesso
+                        <input type="email" name="demo_email" value="{{ old('demo_email', 'teste@farmateste.com.br') }}" required>
+                    </label>
+                    <label>Senha de demonstracao
+                        <input type="password" name="demo_password" minlength="10" autocomplete="new-password" required>
+                    </label>
+                    <label>Confirmar senha
+                        <input type="password" name="demo_password_confirmation" minlength="10" autocomplete="new-password" required>
+                    </label>
+                </div>
+                <div class="alert info" style="margin:0;">
+                    A senha nao fica gravada nesta tela. Compartilhe as credenciais somente com a empresa que fara o teste.
+                </div>
+                <button class="btn" type="submit">Criar ambiente demonstrativo</button>
+            </form>
+        </div>
+    </details>
 @endsection

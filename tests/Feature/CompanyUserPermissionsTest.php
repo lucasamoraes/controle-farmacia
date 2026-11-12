@@ -40,6 +40,52 @@ class CompanyUserPermissionsTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_owner_can_create_complete_demo_pharmacy(): void
+    {
+        [, $owner] = $this->companyWithUser('owner');
+
+        $this->actingAs($owner)
+            ->post('/usuarios/ambiente-demonstracao', [
+                'demo_name' => 'Visitante Teste',
+                'demo_email' => 'visitante@farmateste.com.br',
+                'demo_password' => 'SenhaDemo#2026',
+                'demo_password_confirmation' => 'SenhaDemo#2026',
+            ])
+            ->assertRedirect('/usuarios');
+
+        $demoCompany = Company::where('document', 'DEMO-FARMA-2026')->firstOrFail();
+        $demoUser = User::where('email', 'visitante@farmateste.com.br')->firstOrFail();
+
+        $this->assertDatabaseHas('company_user', [
+            'company_id' => $demoCompany->id,
+            'user_id' => $demoUser->id,
+            'role' => 'owner',
+        ]);
+        $this->assertSame(12, $demoCompany->monthlyRevenues()->count());
+        $this->assertSame(365, $demoCompany->dailySales()->count());
+        $this->assertSame(6, $demoCompany->employees()->count());
+        $this->assertSame(24, $demoCompany->products()->count());
+        $this->assertSame(2, $demoCompany->purchaseLists()->count());
+        $this->assertSame(48, $demoCompany->marketingCampaignMetrics()->count());
+        $this->assertGreaterThan(100, $demoCompany->payables()->count());
+        $this->assertEquals(112500.00, (float) $demoCompany->monthlyRevenues()->whereDate('reference_month', '2026-01-01')->value('gross_revenue'));
+        $this->assertEquals(194700.00, (float) $demoCompany->monthlyRevenues()->whereDate('reference_month', '2026-10-01')->value('gross_revenue'));
+    }
+
+    public function test_finance_user_cannot_create_demo_pharmacy(): void
+    {
+        [, $finance] = $this->companyWithUser('finance');
+
+        $this->actingAs($finance)
+            ->post('/usuarios/ambiente-demonstracao', [
+                'demo_name' => 'Sem Permissao',
+                'demo_email' => 'sempermissao@farmateste.com.br',
+                'demo_password' => 'SenhaDemo#2026',
+                'demo_password_confirmation' => 'SenhaDemo#2026',
+            ])
+            ->assertForbidden();
+    }
+
     public function test_viewer_can_read_lists_but_cannot_write_financial_data(): void
     {
         [$company, $viewer] = $this->companyWithUser('viewer');
